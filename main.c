@@ -33,7 +33,16 @@ _start()
 	printf("%16s: %08X\n", "player", crc32("player"));
 	// wish i could use gets in this case
 	// but also multiline ops would break (literally)
-	QNode test0 = eval_scr(load("testfile.q"));
+	QDbg test1;
+	//printf("%p\n",test1);
+	QNode test0 = eval_scr(load("testfile.q"),&test1);
+	//printf("%p\n",test1);
+	puts("\nDebug keys:\n");
+	for (QDbg test2 = test1; test2 && test2->next; NextItem(test2))
+	{
+		printf("0x%08x %s\n", test2->key, test2->name);
+	}
 	WriteQB(test0, "testfile.qb");
+	WriteDBG(test1, "testfile.dbg");
 	getc(stdin); // system pause
 }

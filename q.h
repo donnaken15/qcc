@@ -123,5 +123,6 @@ QKey crc32(char*);
 void initCRC32();
 char*tokenize(char*, QToken);
 QNode parse(QToken);
-QNode eval_scr(char*);
+QNode eval_scr(char*, QDbg*dbg);
 void WriteQB(QNode, char*);
+void WriteDBG(QDbg dbg, char*fname);

@@ -40,7 +40,7 @@ uint _sizeofQNode = sizeof(__static_QNode) - 4;
 //int  debugkeys [DEBUG_KEY_COUNT];
 //char debugnames[DEBUG_KEY_COUNT][0x100];
 
-//char*tmpname;
+char*tmpname;
 
 #define PREGEN_CRCTAB 0
 
@@ -212,6 +212,7 @@ char*tokenize(char*text, QToken out)
 	if (!*text)
 	{
 		out->type = QTokEOF;
+		puts("end of file");
 		return text;
 	}
 	//this is dumb
@@ -256,10 +257,10 @@ char*tokenize(char*text, QToken out)
 
 		char*keySZ = malloc(il + 1);//can i not do this
 		strncpy(keySZ, id, il);
-		keySZ[++il] = 0;
+		keySZ[il] = 0;
 		out->nkey = crc32(keySZ);
-		--il;
-		//tmpname = keySZ;
+		tmpname = keySZ;
+
 	FoundId:
 		printf("new token: %2u, value: %08X, string: %2u: %.*s\n",
 			*type, out->value, il, il, id);
@@ -342,10 +343,8 @@ char*tokenize(char*text, QToken out)
 	}
 	return text;
 }
-QNode parse(QToken tok)//, QDbg dbg)
+QNode parse(QToken tok)
 {
-	//if (dbg)
-		//dbg = malloc(sizeof(__static_QDbg));
 	QNode items = malloc(sizeof(__static_QNode));
 	QNode node = items;
 	uint tokdepth = 0;
@@ -474,13 +473,16 @@ QNode parse(QToken tok)//, QDbg dbg)
 	}
 	return items;
 }
-QNode eval_scr(char*scr)
+QNode eval_scr(char*scr, QDbg*dbg)
 {
+	if (dbg)
+		*dbg = malloc(sizeof(__static_QDbg));
 	puts(scr);
 	char*lp = scr;
 	QToken tokens;
 	QToken tmptok;
 	char firstitem = 1;
+	QDbg tmpdbg = *dbg;
 	while (*lp)
 	{
 		if (!firstitem)
@@ -497,6 +499,13 @@ QNode eval_scr(char*scr)
 		}
 		printf("%4u: ", lp - scr);
 		lp = tokenize(lp, tmptok);
+		if (tmptok->type == QTokKey)
+		{
+			tmpdbg->name = tmpname;
+			tmpdbg->key  = tmptok->nkey;
+			tmpdbg->next = malloc(sizeof(__static_QDbg));
+			NextItem(tmpdbg);
+		}
 	}
 #if 0
 	puts("test:");
@@ -546,5 +555,21 @@ void WriteQB(QNode items, char*fname)
 	fwrite(&qbin->head.size, sizeof(int), 1, qf);
 	qbin->head.size = Eswap(qbin->head.size);
 	fclose(qf);
+}
+const char* dbg_hd0 = "[LineNumbers]\n";
+const char* dbg_hd1 = "[Checksums]\n";
+void WriteDBG(QDbg dbg, char*fname)
+{
+	FILE*dbgf = fopen(fname, "w");
+	fwrite(dbg_hd0, 14, 1, dbgf);
+	fputs("\n", dbgf);
+	fwrite(dbg_hd1, 12, 1, dbgf);
+	for (QDbg test2 = dbg; test2 && test2->next; NextItem(test2))
+	{
+		fprintf(dbgf, "0x%08x %s\n", test2->key, test2->name);
+	}
+	fputs("\n", dbgf);
+	fclose(dbgf);
+	// todo: remove duplicates (lazy to)
 }
 
