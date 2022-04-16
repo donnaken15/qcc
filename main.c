@@ -16,8 +16,14 @@ char*load(char*fname)
 	return  out;
 }
 
-int main(int argc, char*argv[])
+int   argc;
+char**argv, __env;
+_start()
 {
+	__getmainargs(&argc,&argv,&__env,0);
+	#if (PREGEN_CRCTAB == 0)
+		initCRC32();
+	#endif
 	puts("Tests");
 	puts("CRC generation:");
 	printf("%16s: %08X\n", "none", crc32("none"));
@@ -26,6 +32,8 @@ int main(int argc, char*argv[])
 	printf("%16s: %08X\n", "fastgh3", crc32("fastgh3"));
 	printf("%16s: %08X\n", "player", crc32("player"));
 	// wish i could use gets in this case
-	WriteQB(eval_scr(load("testfile.q")), "testfile.qb");
-	//getc(stdin); // system pause
+	// but also multiline ops would break (literally)
+	QNode test0 = eval_scr(load("testfile.q"));
+	WriteQB(test0, "testfile.qb");
+	getc(stdin); // system pause
 }

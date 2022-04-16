@@ -44,7 +44,8 @@ typedef struct {
 		int   op;
 	};
 	uint type;
-	void*next; // KYS
+	void*next;
+	//^ WHY
 } __static_QToken, *QToken;
 //uint _sizeofQToken; // for use with binary writing
 //uint _sizeofQNode;
@@ -97,6 +98,14 @@ enum QNodeTypes
 };
 #define NextItem(i) /*if (i->next)*/ i = i->next
 
+typedef struct {
+	QKey key;
+	char*name;
+	void*next;
+	//uint**lnum; // implement for scripts
+} __static_QDbg, *QDbg;
+//extern char*tmpname;
+
 enum CharFilters {
 	CF_Whitespace = 0,
 	CF_Number,   // (Sk8)
@@ -104,7 +113,7 @@ enum CharFilters {
 	CF_Alphanum, // thought id be clever here to use a bitmask or something
 				 // but im also checking one character at a time with this
 				 // though then later enums & 0b11 are not allowed then
-	CF_Syntax,
+	CF_Syntax = 0b000100,
 	CF_None = 0x80000000
 };
 
