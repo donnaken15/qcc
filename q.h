@@ -118,7 +118,7 @@ enum CharFilters {
 };
 
 __inline Eswap(int);
-//#define Eswap(i) ((i & 0xFF) << 24) | ((i & 0xFF00) << 8) | ((i & 0xFF0000) >> 8) | ((i & 0xFF000000) >> 24)
+#define ESWAP(i) (((i & 0xFF) << 24) | ((i & 0xFF00) << 8) | ((i & 0xFF0000) >> 8) | ((i & 0xFF000000) >> 24))
 QKey crc32(char*);
 void initCRC32();
 char*tokenize(char*, QToken);

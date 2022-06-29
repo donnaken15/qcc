@@ -1,6 +1,7 @@
 [LineNumbers]
 
 [Checksums]
+0x3c955935 testfile.qb
 0x806fff30 none
 0x3a833bc1 show_gpu_time
 0x2c801951 output_gpu_log
@@ -18,7 +19,6 @@
 0x9b2f5962 current_difficulty
 0xb0e46cbd expert
 0x6bf07ead current_difficulty2
-0xb0e46cbd expert
 0xc10b44e8 current_level
 0x802a5304 load_z_viewer
 0x8e3d600e current_highway
@@ -29,7 +29,5 @@
 0x018c3eb8 current_endtime
 0x16d91bc1 current_speedfactor
 0x76ebdc31 my_int
-0x76ebdc31 my_int
-0x5a9c13ae my_float
 0x5a9c13ae my_float
 

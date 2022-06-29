@@ -5,6 +5,7 @@
 #include "q.h"
 
 // PC format only
+// or atleast GH3
 
 int die()
 {
@@ -16,8 +17,6 @@ int die()
 /*
 though now i cant use inline :(
 UNLESS SOMEONE WANTS TO ENABLE SUPPORT FOR THAT!
-AND SOMEHOW MACRO FUNCTION FAILS TO WORK
-"CANNOT USE POINTERS HERE" !! >:(
 */
 __inline Eswap(int value)
 {
@@ -41,6 +40,16 @@ uint _sizeofQNode = sizeof(__static_QNode) - 4;
 //char debugnames[DEBUG_KEY_COUNT][0x100];
 
 char*tmpname;
+
+#define Qlogging 0
+
+#if (Qlogging == 1)
+#define qlog(t) puts(t)
+#define qlogx printf
+#else
+#define qlog(t)
+#define qlogx(...)
+#endif
 
 #define PREGEN_CRCTAB 0
 
@@ -161,6 +170,7 @@ charfilter(char c)
 	if (c == '\n' || !c)
 		return CF_None;
 }
+char*tokenErrorHead = "ERROR @ Tokenizer: \"%s\"\n";
 char*tokenize(char*text, QToken out)
 {
 	int*type = &out->type;
@@ -172,10 +182,9 @@ char*tokenize(char*text, QToken out)
 	}
 	if (*text == '/')
 	{
-		//printf("%p\n",text);
 		if (*(text+1) == '/')
 		{
-			puts("got comment");
+			qlog("got comment");
 			text++;
 			do {
 				text++;
@@ -183,7 +192,7 @@ char*tokenize(char*text, QToken out)
 		}
 		else if (*(text+1) == '*')
 		{
-			puts("got multiline comment");
+			qlog("got multiline comment");
 			text++;
 			text++;
 			do {
@@ -212,7 +221,7 @@ char*tokenize(char*text, QToken out)
 	if (!*text)
 	{
 		out->type = QTokEOF;
-		puts("end of file");
+		qlog("end of file");
 		return text;
 	}
 	//this is dumb
@@ -233,23 +242,53 @@ char*tokenize(char*text, QToken out)
 			//printf("%u\n", charfilter(*text));
 		} while (charfilter(*text) & CF_Alphanum);
 		*type = QTokOp;
-		if (!strncmp(id, "int", 3))
+		// do i even need to do this here instead of just looking for CRC'd keywords
+		static char*invkey = "Invalid keyword",
+			*kwint = "int",
+			*kwfloat = "float",
+			*kwif = "if",
+			*kwqbkey = "qbkey";
+		if (!strncmp(id, kwint, 3))
 		{
+			if (charfilter(id[3]) != CF_Whitespace)
+			{
+				printf(tokenErrorHead,kwint,id);
+				puts(invkey);
+				die();
+			}
 			out->op = QOpInt;
 			goto FoundId;
 		}
-		if (!strncmp(id, "float", 5))
+		if (!strncmp(id, kwfloat, 5))
 		{
+			if (charfilter(id[5]) != CF_Whitespace)
+			{
+				printf(tokenErrorHead,kwfloat,id);
+				puts(invkey);
+				die();
+			}
 			out->op = QOpFloat;
 			goto FoundId;
 		}
-		if (!strncmp(id, "if", 2))
+		if (!strncmp(id, kwif, 2))
 		{
+			if (charfilter(id[2]) != CF_Whitespace)
+			{
+				printf(tokenErrorHead,kwif,id);
+				puts(invkey);
+				die();
+			}
 			out->op = QOpIf;
 			goto FoundId;
 		}
-		if (!strncmp(id, "qbkey", 5))
+		if (!strncmp(id, kwqbkey, 5))
 		{
+			if (charfilter(id[5]) != CF_Whitespace)
+			{
+				printf(tokenErrorHead,kwqbkey,id);
+				puts(invkey);
+				die();
+			}
 			out->op = QOpKey;
 			goto FoundId;
 		}
@@ -262,7 +301,7 @@ char*tokenize(char*text, QToken out)
 		tmpname = keySZ;
 
 	FoundId:
-		printf("new token: %2u, value: %08X, string: %2u: %.*s\n",
+		qlogx("new token: %2u, value: %08X, string: %2u: %.*s\n",
 			*type, out->value, il, il, id);
 		break;
 	case CF_Syntax:
@@ -297,7 +336,7 @@ char*tokenize(char*text, QToken out)
 				break;
 			}
 		}
-		printf("new token: %2u, value:      %3u, string:  1: %c\n",
+		qlogx("new token: %2u, value:      %3u, string:  1: %c\n",
 			*type, out->value, *text);
 		text++;
 		break;
@@ -309,9 +348,10 @@ char*tokenize(char*text, QToken out)
 				dec++;
 			if (dec > 1)
 			{
-				printf("ERROR @ Tokenizer: \"%s\"\n"
+				printf(tokenErrorHead,num);
+				printf(
 					"Invalid number, found more than one decimal.\n"
-					"Are you creating version numbers, bro?\n", num);
+					"Are you creating version numbers, bro?\n");
 				die();
 				// abort created stuck processes
 				// i can't kill, which makes me
@@ -320,8 +360,8 @@ char*tokenize(char*text, QToken out)
 			// check for extra signs
 			if (*text == '-')
 			{
-				printf("ERROR @ Tokenizer: \"%s\"\n"
-						"Invalid number, found more than one negative sign.\n", num);
+				printf(tokenErrorHead,num);
+				printf("Invalid number, found more than one negative sign.\n");
 				die();
 			}
 		} while (charfilter(*text) == CF_Number);
@@ -335,13 +375,24 @@ char*tokenize(char*text, QToken out)
 			*type = QTokFloat;
 			out->single = atof(num);
 		}
-		printf("new token: %2u, value: %08X, string: %2u: %.*s\n",
+		qlogx("new token: %2u, value: %08X, string: %2u: %.*s\n",
 			*type, out->value, dgt, dgt, num);
 		break;
 	case CF_None:
 		break;
 	}
 	return text;
+}
+void printErrorHead(uint depth)
+{
+	printf("ERROR @ Parser: token %3u\n", depth);
+}
+void exitOnPrematEnd(uint depth)
+{
+	static char*PrematEnd = "Unexpected end of input";
+	puts(depth);
+	printf(PrematEnd);
+	die();
 }
 QNode parse(QToken tok)
 {
@@ -351,15 +402,15 @@ QNode parse(QToken tok)
 	while (tok)
 	{
 		node->always20 = 0x2000;
-		node->x278081F3 = 0xF3818027; //BE
+		node->x278081F3 = ESWAP(0x278081F3); //BE
 		node->pad10 = 0;
 		node->next = 0;
 		//node->type = tok->type;
-		printf("%4u: token: type: %2u, %p\n", tokdepth, tok->type, tok->value);
+		qlogx("%4u: token: type: %2u, %p\n", tokdepth, tok->type, tok->value);
 		switch (tok->type)
 		{
 		case QTokOp:
-			printf("      op   , type :   %2u\n", tok->op);
+			qlogx("      op   , type :   %2u\n", tok->op);
 			switch (tok->op)
 			{
 				// int player = 0;
@@ -374,49 +425,45 @@ QNode parse(QToken tok)
 				// variable declaration
 				node->type = QTypeInt;
 			VarDefine:; // <-- lol V
-				static char*VarDef_err1_end = " when declaring variable.\n",
-							*PrematEnd = "Unexpected end of input\n";
+				static char*VarDef_err1_end = " when declaring variable.\n";
 				if (!tok->next)
 				{
-					printf("ERROR @ Parser: token %3u\n%s", tokdepth, PrematEnd);
-					die();
+					exitOnPrematEnd(tokdepth);
 				}
 				NextItem(tok);
 				tokdepth++;
-				printf("%4u\n", tokdepth);
+				qlogx("%4u\n", tokdepth);
 				// int player = 0;
 				//     ------
 				if (tok->type != QTokKey)
 				{
-					printf("ERROR @ Parser: token %3u\n", tokdepth);
+					printErrorHead(tokdepth);
 					printf("Encountered non QbKey name%s", VarDef_err1_end);
 					die();
 				}
 				node->name = tok->nkey;
 				if (!tok->next)
 				{
-					printf("ERROR @ Parser: token %3u\n%s", tokdepth, PrematEnd);
-					die();
+					exitOnPrematEnd(tokdepth);
 				}
 				NextItem(tok);
 				tokdepth++;
-				printf("%4u\n", tokdepth);
+				qlogx("%4u\n", tokdepth);
 				// int player = 0;
 				//            -
 				if (tok->type != QTokOp || tok->op != QOpSet)
 				{
-					printf("ERROR @ Parser: token %3u\n", tokdepth);
+					printErrorHead(tokdepth);
 					printf("Assignment operation not found%s", VarDef_err1_end);
 					die();
 				}
 				if (!tok->next)
 				{
-					printf("ERROR @ Parser: token %3u\n%s", tokdepth, PrematEnd);
-					die();
+					exitOnPrematEnd(tokdepth);
 				}
 				NextItem(tok);
 				tokdepth++;
-				printf("%4u\n", tokdepth);
+				qlogx("%4u\n", tokdepth);
 				// int player = 0;
 				//              -
 				// dumb
@@ -435,26 +482,26 @@ QNode parse(QToken tok)
 						goto QAssignNotMatching;
 					break;
 				QAssignNotMatching:
-					printf("ERROR @ Parser: token %3u\n", tokdepth);
-					printf("Value type not matching type of variable\n");
+					printErrorHead(tokdepth);
+					printf("Value type not matching type of variable");
 					die();
 					break;
 				}
 				node->value = tok->value;
 				if (!tok->next)
 				{
-					printf("ERROR @ Parser: token %3u\n%s", tokdepth, PrematEnd);
-					die();
+					exitOnPrematEnd(tokdepth);
 				}
 				NextItem(tok);
 				tokdepth++;
-				printf("%4u\n", tokdepth);
+				qlogx("%4u\n", tokdepth);
 				if (tok->type != QTokOp || tok->value != QOpSEnd)
 				{
-					printf("ERROR @ Parser: token %3u\nUnclosed statement\n", tokdepth);
+					printErrorHead(tokdepth);
+					printf("Unclosed statement");
 					die();
 				}
-				printf("      New node: %3u, name: %p, value: %p\n",
+				qlogx("      New node: %3u, name: %p, value: %p\n",
 					node->type, node->name, node->number);
 				break;
 			}
@@ -473,11 +520,21 @@ QNode parse(QToken tok)
 	}
 	return items;
 }
+checkdbg(QDbg dbg,uint key)
+{
+	while (dbg)
+	{
+		if (dbg->key == key)
+			return 1; // return true if a key already exists
+		NextItem(dbg);
+	}
+	return 0;
+}
 QNode eval_scr(char*scr, QDbg*dbg)
 {
 	if (dbg)
-		*dbg = malloc(sizeof(__static_QDbg));
-	puts(scr);
+		*dbg = calloc(1,sizeof(__static_QDbg));
+	qlog(scr);
 	char*lp = scr;
 	QToken tokens;
 	QToken tmptok;
@@ -497,34 +554,37 @@ QNode eval_scr(char*scr, QDbg*dbg)
 			tokens = tmptok;
 			firstitem = 0;
 		}
-		printf("%4u: ", lp - scr);
+		qlogx("%4u: ", lp - scr);
 		lp = tokenize(lp, tmptok);
 		if (tmptok->type == QTokKey)
 		{
-			tmpdbg->name = tmpname;
-			tmpdbg->key  = tmptok->nkey;
-			tmpdbg->next = malloc(sizeof(__static_QDbg));
-			NextItem(tmpdbg);
+			if (!checkdbg(*dbg,tmptok->nkey)) // disallow dupes
+			{
+				tmpdbg->name = tmpname;
+				tmpdbg->key  = tmptok->nkey;
+				tmpdbg->next = calloc(1,sizeof(__static_QDbg));
+				NextItem(tmpdbg);
+			}
 		}
 	}
 #if 0
-	puts("test:");
+	qlog("test:");
 	for (QToken test = tokens; test; NextItem(test))
 	{
-		printf("token: type: %2u, ", test->type);
+		qlogx("token: type: %2u, ", test->type);
 		switch (test->type)
 		{
 		case QTokOp:
-			printf("op   , type :   %2u\n", test->op);
+			qlogx("op   , type :   %2u\n", test->op);
 			break;
 		case QTokKey:
-			printf("key  , key  : %8X\n", test->nkey);
+			qlogx("key  , key  : %8X\n", test->nkey);
 			break;
 		case QTokInt:
-			printf("int  , value: %4u\n", test->number);
+			qlogx("int  , value: %4u\n", test->number);
 			break;
 		case QTokFloat:
-			printf("float, value: %4f\n", test->single);
+			qlogx("float, value: %4f\n", test->single);
 			break;
 		}
 	}
@@ -558,18 +618,18 @@ void WriteQB(QNode items, char*fname)
 }
 const char* dbg_hd0 = "[LineNumbers]\n";
 const char* dbg_hd1 = "[Checksums]\n";
+char*nl = "\n\0";
 void WriteDBG(QDbg dbg, char*fname)
 {
 	FILE*dbgf = fopen(fname, "w");
 	fwrite(dbg_hd0, 14, 1, dbgf);
-	fputs("\n", dbgf);
+	fputs(nl, dbgf);
 	fwrite(dbg_hd1, 12, 1, dbgf);
 	for (QDbg test2 = dbg; test2 && test2->next; NextItem(test2))
 	{
 		fprintf(dbgf, "0x%08x %s\n", test2->key, test2->name);
 	}
-	fputs("\n", dbgf);
+	fputs(nl, dbgf);
 	fclose(dbgf);
-	// todo: remove duplicates (lazy to)
 }
 
