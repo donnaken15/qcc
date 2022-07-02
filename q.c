@@ -17,6 +17,11 @@ int die()
 /*
 though now i cant use inline :(
 UNLESS SOMEONE WANTS TO ENABLE SUPPORT FOR THAT!
+
+it actually saved me a bunch of
+bytes to use a standalone function
+when i used it with values that
+aren't constants
 */
 __inline Eswap(int value)
 {
@@ -32,20 +37,25 @@ char qhead[] = {
 	0x0C, 0x08, 0x02, 0x04, 0x14, 0x02, 0x04, 0x0C,
 	0x10, 0x10, 0x0C, 0x00
 };
-uint _sizeofQToken = sizeof(__static_QToken) - 4; // for use with binary writing
-uint _sizeofQNode = sizeof(__static_QNode) - 4;
-
-//#define DEBUG_KEY_COUNT 0x8000
-//int  debugkeys [DEBUG_KEY_COUNT];
-//char debugnames[DEBUG_KEY_COUNT][0x100];
+uint _sizeofQToken = QSIZEOF(QToken) - 4; // for use with binary writing
+uint _sizeofQNode = QSIZEOF(QNode) - 4;
 
 char*tmpname;
+
+//#define eputs(t) fputs(t,stderr)
+void eputs(char*t) //chart lol
+{
+	fputs(t,stderr);
+} // saved like 100 bytes not making this a macro :/
+// ofc because stderr is an extra value to push
+// and because IOB
+#define eprintf(...) fprintf(stderr, __VA_ARGS__)
 
 #define Qlogging 0
 
 #if (Qlogging == 1)
-#define qlog(t) puts(t)
-#define qlogx printf
+#define qlog(t) eputs(t)
+#define qlogx(...) fprintf(stderr, __VA_ARGS__)
 #else
 #define qlog(t)
 #define qlogx(...)
@@ -148,7 +158,10 @@ QKey crc32(char*text)
 	register uint crc = 0xFFFFFFFF, len = strlen(text);
 	for (register uint i = 0; i < len; i++)
 	{
-		crc = crc >> 8 & 0x00FFFFFF ^ crctable[(crc ^ text[i]) & 0xFF];
+		register char sym = text[i]; // ugh
+		if (sym == '/') sym = '\\';
+		if (sym <= 'Z' && sym >= 'A') sym += 0x20;
+		crc = crc >> 8 & 0x00FFFFFF ^ crctable[(crc ^ sym) & 0xFF];
 	}
 	return crc;
 }
@@ -175,6 +188,7 @@ char*tokenize(char*text, QToken out)
 {
 	int*type = &out->type;
 	//puts(text);
+	char*textstart = text;
 	checkForBothWSandCmnts:
 	while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r')
 	{
@@ -184,7 +198,7 @@ char*tokenize(char*text, QToken out)
 	{
 		if (*(text+1) == '/')
 		{
-			qlog("got comment");
+			qlog("got comment,");
 			text++;
 			do {
 				text++;
@@ -192,7 +206,7 @@ char*tokenize(char*text, QToken out)
 		}
 		else if (*(text+1) == '*')
 		{
-			qlog("got multiline comment");
+			qlog("got multiline comment, ");
 			text++;
 			text++;
 			do {
@@ -213,7 +227,7 @@ char*tokenize(char*text, QToken out)
 		}
 		else
 		{
-			puts("wtf are you doing");
+			eputs("wtf are you doing\n");
 			die();
 		}
 		goto checkForBothWSandCmnts; // hi rato :^)
@@ -221,7 +235,7 @@ char*tokenize(char*text, QToken out)
 	if (!*text)
 	{
 		out->type = QTokEOF;
-		qlog("end of file");
+		qlog("end of file\n\n");
 		return text;
 	}
 	//this is dumb
@@ -243,7 +257,13 @@ char*tokenize(char*text, QToken out)
 		} while (charfilter(*text) & CF_Alphanum);
 		*type = QTokOp;
 		// do i even need to do this here instead of just looking for CRC'd keywords
-		static char*invkey = "Invalid keyword",
+		// but they're also designated keywords, and it could make it confusing
+		// or something to figure out how to parse (crc("if")) (test == test2)
+		//
+		// ps: i just realized how it would work out in the parser
+		// (found if key, check if user added proper syntax, otherwise throw)
+		// generally CRC can probably make string comparing and other operations faster
+		static char*invkey = "Invalid keyword\n",
 			*kwint = "int",
 			*kwfloat = "float",
 			*kwif = "if",
@@ -252,8 +272,8 @@ char*tokenize(char*text, QToken out)
 		{
 			if (charfilter(id[3]) != CF_Whitespace)
 			{
-				printf(tokenErrorHead,kwint,id);
-				puts(invkey);
+				eprintf(tokenErrorHead,kwint);
+				eputs(invkey);
 				die();
 			}
 			out->op = QOpInt;
@@ -263,8 +283,8 @@ char*tokenize(char*text, QToken out)
 		{
 			if (charfilter(id[5]) != CF_Whitespace)
 			{
-				printf(tokenErrorHead,kwfloat,id);
-				puts(invkey);
+				eprintf(tokenErrorHead,kwfloat);
+				eputs(invkey);
 				die();
 			}
 			out->op = QOpFloat;
@@ -274,8 +294,8 @@ char*tokenize(char*text, QToken out)
 		{
 			if (charfilter(id[2]) != CF_Whitespace)
 			{
-				printf(tokenErrorHead,kwif,id);
-				puts(invkey);
+				eprintf(tokenErrorHead,kwif);
+				eputs(invkey);
 				die();
 			}
 			out->op = QOpIf;
@@ -285,8 +305,8 @@ char*tokenize(char*text, QToken out)
 		{
 			if (charfilter(id[5]) != CF_Whitespace)
 			{
-				printf(tokenErrorHead,kwqbkey,id);
-				puts(invkey);
+				eprintf(tokenErrorHead,kwqbkey);
+				eputs(invkey);
 				die();
 			}
 			out->op = QOpKey;
@@ -311,6 +331,12 @@ char*tokenize(char*text, QToken out)
 			switch (*text)
 			{
 			case '=':
+				if (text[1] == '=')
+				{
+					text++;
+					out->op = QOpCmp;
+					break;
+				}
 				out->op = QOpSet;
 				break;
 			case ';':
@@ -348,8 +374,8 @@ char*tokenize(char*text, QToken out)
 				dec++;
 			if (dec > 1)
 			{
-				printf(tokenErrorHead,num);
-				printf(
+				eprintf(tokenErrorHead,num);
+				eputs(
 					"Invalid number, found more than one decimal.\n"
 					"Are you creating version numbers, bro?\n");
 				die();
@@ -360,8 +386,8 @@ char*tokenize(char*text, QToken out)
 			// check for extra signs
 			if (*text == '-')
 			{
-				printf(tokenErrorHead,num);
-				printf("Invalid number, found more than one negative sign.\n");
+				eprintf(tokenErrorHead,num);
+				eputs("Invalid number, found more than one negative sign.\n");
 				die();
 			}
 		} while (charfilter(*text) == CF_Number);
@@ -385,18 +411,19 @@ char*tokenize(char*text, QToken out)
 }
 void printErrorHead(uint depth)
 {
-	printf("ERROR @ Parser: token %3u\n", depth);
+	eprintf("ERROR @ Parser: token %3u\n", depth);
 }
 void exitOnPrematEnd(uint depth)
 {
-	static char*PrematEnd = "Unexpected end of input";
-	puts(depth);
-	printf(PrematEnd);
+	static char*PrematEnd = "Unexpected end of input\n";
+	printErrorHead(depth);
+	eputs(PrematEnd);
 	die();
 }
 QNode parse(QToken tok)
 {
-	QNode items = malloc(sizeof(__static_QNode));
+	qlog("parsing:\n");
+	QNode items = malloc(QSIZEOF(QNode));
 	QNode node = items;
 	uint tokdepth = 0;
 	while (tok)
@@ -438,7 +465,8 @@ QNode parse(QToken tok)
 				if (tok->type != QTokKey)
 				{
 					printErrorHead(tokdepth);
-					printf("Encountered non QbKey name%s", VarDef_err1_end);
+					eputs("Encountered non QbKey name");
+					eputs(VarDef_err1_end);
 					die();
 				}
 				node->name = tok->nkey;
@@ -454,7 +482,8 @@ QNode parse(QToken tok)
 				if (tok->type != QTokOp || tok->op != QOpSet)
 				{
 					printErrorHead(tokdepth);
-					printf("Assignment operation not found%s", VarDef_err1_end);
+					eputs("Assignment operation not found");
+					eputs(VarDef_err1_end);
 					die();
 				}
 				if (!tok->next)
@@ -483,7 +512,7 @@ QNode parse(QToken tok)
 					break;
 				QAssignNotMatching:
 					printErrorHead(tokdepth);
-					printf("Value type not matching type of variable");
+					eputs("Value type not matching type of variable\n");
 					die();
 					break;
 				}
@@ -494,11 +523,11 @@ QNode parse(QToken tok)
 				}
 				NextItem(tok);
 				tokdepth++;
-				qlogx("%4u\n", tokdepth);
-				if (tok->type != QTokOp || tok->value != QOpSEnd)
+				qlogx("%4u\n", tokdepth); // v stupid TCC
+				if (tok->type != QTokOp || (int)(tok->value) != QOpSEnd)
 				{
 					printErrorHead(tokdepth);
-					printf("Unclosed statement");
+					eputs("Unclosed statement\n");
 					die();
 				}
 				qlogx("      New node: %3u, name: %p, value: %p\n",
@@ -507,12 +536,12 @@ QNode parse(QToken tok)
 			}
 			break;
 		case QTokEOF:
-			node->next = 0xFFFFFFFF;
+			node->next = (void*)0xFFFFFFFF;
 			break;
 		}
 		if (tok->next)
 		{
-			node->next = malloc(sizeof(__static_QNode));
+			node->next = malloc(QSIZEOF(QNode));
 			NextItem(node);
 		}
 		NextItem(tok);
@@ -533,39 +562,43 @@ checkdbg(QDbg dbg,uint key)
 QNode eval_scr(char*scr, QDbg*dbg)
 {
 	if (dbg)
-		*dbg = calloc(1,sizeof(__static_QDbg));
-	qlog(scr);
+		*dbg = calloc(1,QSIZEOF(QDbg));
+	//qlog(scr);
 	char*lp = scr;
 	QToken tokens;
 	QToken tmptok;
 	char firstitem = 1;
-	QDbg tmpdbg = *dbg;
+	QDbg tmpdbg;
+	if (dbg)
+		tmpdbg = *dbg;
+	qlog("eval / tokenizing:\n");
 	while (*lp)
 	{
 		if (!firstitem)
 		{
-			tmptok->next = malloc(sizeof(__static_QToken));
+			tmptok->next = malloc(QSIZEOF(QToken));
 			NextItem(tmptok);
 			tmptok->next = 0;
 		}
 		else
 		{
-			tmptok = malloc(sizeof(__static_QToken));
+			tmptok = malloc(QSIZEOF(QToken));
 			tokens = tmptok;
 			firstitem = 0;
 		}
 		qlogx("%4u: ", lp - scr);
 		lp = tokenize(lp, tmptok);
-		if (tmptok->type == QTokKey)
-		{
-			if (!checkdbg(*dbg,tmptok->nkey)) // disallow dupes
+		if (dbg)
+			if (tmptok->type == QTokKey)
 			{
-				tmpdbg->name = tmpname;
-				tmpdbg->key  = tmptok->nkey;
-				tmpdbg->next = calloc(1,sizeof(__static_QDbg));
-				NextItem(tmpdbg);
+				if (!checkdbg(*dbg,tmptok->nkey)) // disallow dupes
+				{
+					tmpdbg->name = tmpname;
+					tmpdbg->key  = tmptok->nkey;
+					tmpdbg->next = calloc(1,QSIZEOF(QDbg));
+					NextItem(tmpdbg);
+				}
 			}
-		}
 	}
 #if 0
 	qlog("test:");
@@ -598,15 +631,17 @@ void WriteQB(QNode items, char*fname)
 	qbin->head.gap = 0;
 	qbin->head.size = 0;
 	qbin->items = items;
-	memcpy(&qbin->head.unknown, qhead, sizeof(qhead));
+	memcpy(&qbin->head.unknown, qhead, sizeof(qhead)); // why even
 	FILE*qf = fopen(fname, "wb");
 	fwrite(qbin, sizeof(QHead), 1, qf);
-	for (; items && items->next != 0xFFFFFFFF; NextItem(items))
+	for (; items && items->next != (void*)0xFFFFFFFF; NextItem(items))
 	{
-		items->value = Eswap(items->value);
+		//              v            v  more stupid
+		items->value = (void*)Eswap((uint)items->value);
+		// cant get rid of the warning, so, too bad
 		items->name = Eswap(items->name);
 		fwrite(items, _sizeofQNode, 1, qf);
-		items->value = Eswap(items->value);
+		items->value = (void*)Eswap((uint)items->value);
 		items->name = Eswap(items->name);
 	}
 	qbin->head.size = ftell(qf);
@@ -623,6 +658,7 @@ void WriteDBG(QDbg dbg, char*fname)
 {
 	FILE*dbgf = fopen(fname, "w");
 	fwrite(dbg_hd0, 14, 1, dbgf);
+	
 	fputs(nl, dbgf);
 	fwrite(dbg_hd1, 12, 1, dbgf);
 	for (QDbg test2 = dbg; test2 && test2->next; NextItem(test2))

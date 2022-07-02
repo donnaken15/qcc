@@ -1,11 +1,11 @@
 #pragma once
 
 typedef void* unk;
-typedef int   QKey;
+typedef unsigned int QKey;
 typedef unsigned int uint;
 typedef unsigned short ushort;
 
-typedef int QKey;
+//typedef int QKey;
 //typedef int   QTokenType;
 enum QTokenType {
 	QTokEOF = -1,
@@ -23,6 +23,9 @@ enum QOps {
 	QOpInt,  // int
 	QOpFloat,// float
 	QOpKey,  // qbkey
+	QOpStr,  // string
+	QOpStrc, // struct
+	//QOpPtr,  // qbkeyref
 	QOpSet,  // =
 	QOpCmp,  // ==
 	QOpSEnd, // ;
@@ -34,6 +37,8 @@ enum QOps {
 	QOpAEnd, // ]
 };
 
+#define QLOCAL(t) __static_ ## t
+#define QSIZEOF(t) sizeof(QLOCAL(t))
 typedef struct {
 	union {
 		unk   value;

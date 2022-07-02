@@ -47,73 +47,119 @@ _start()
 	}
 	fclose(fscr);
 	// <strikeout>should the script file really be a non-1st argument</strikeout>
-	char*outf = (char*)0;
-	char*scriptname = argv[1];
+	char*outf = 0;
+	char*scriptname = 0;
 	// convenient for if the program
 	// runs at the root path of a scripts folder
 	// so just "scripts\guitar\guitar.qb" can be input
 	// without specifying it via --name switch
 	char writedbg = 0;
-	for (int i = 2; i < argc; i++)
-	{
-		// SHOULD MAKE THESE INTO A FUNCTION OR ARRAY
-		if (!strcmp(argv[i],"--out"))
-		{
-			if (i+1<argc)
-			{
-				outf = argv[i+1];
-			}
-			else
-			{
-				puts("Incomplete parameters @ --out argument");
-				return 3;
-			}
-		}
-		if (!strcmp(argv[i],"--name"))
+	
+	char switchcount = 3;
+	char*switchnames[] = {
+		"--out",
+		"--name",
 			// originally named --scriptname but
 			// stuck out *literally* amongst the smaller named params
+		"--dbg"
+	};
+	void*switchoutvals[] = {
+		&outf,
+		&scriptname,
+		&writedbg
+	};
+	char switchextraarg[] = {
+		// 1 = arg+1 string -> switchoutvals
+		// 0 = arg exists bool -> switchoutvals
+		1,
+		1,
+		0
+	};
+	for (int i = 2; i < argc; i++)
+	{
+		char doesArgExist = 0;
+		for (int j = 0; j < switchcount; j++)
 		{
-			if (i+1<argc)
+			if (!strcmp(argv[i],switchnames[j]))
 			{
-				scriptname = argv[i+1];
-			}
-			else
-			{
-				puts("Incomplete parameters @ --name argument");
-				return 3;
+				if (switchextraarg[j])
+				{
+					if (i+1<argc)
+					{
+						if (!*switchoutvals[j])
+						{
+							*switchoutvals[j] = argv[i+1];
+							i++;
+							doesArgExist = 1;
+							break;
+						}
+						else
+						{
+							i += 2; //*
+							printf("%s argument entered more than once\n",switchnames[j]);
+							break;
+						}
+					}
+					else
+					{
+						printf("Incomplete parameters @ %s argument\n",switchnames[j]);
+						return 3;
+					}
+				}
+				else
+				{
+					*switchoutvals[j] = (char)1;
+					doesArgExist = 1;
+					break;
+				}
 			}
 		}
-		if (!strcmp(argv[i],"--dbg"))
-			writedbg = 1;
+		if (i == argc) //* |:|
+			break;
+		if (!doesArgExist)
+		{
+			printf("Unknown switch: %s\n", argv[i]);
+		}
 	}
 	if (!outf)
 	{
 		register int fnlen = strlen(argv[1])+1;
-		outf = memcpy(malloc(fnlen+1),argv[1],fnlen);
+		outf = (char*)memcpy(malloc(fnlen+1),argv[1],fnlen);
 		*(short*)(&outf[fnlen-1]) = 0x0062; // 1337 lol // 'b\0'
 	}
+	if (!scriptname)
+		scriptname = outf;
 	
 	#if (PREGEN_CRCTAB == 0)
 		initCRC32();
 	#endif
 	
 	printf("Compiling %s...\n",argv[1]);
-	QDbg _out_dbg;
-	QNode output = eval_scr(load(argv[1]),&_out_dbg);
-	
-	__static_QDbg _out_dbg_; // insert scriptname param
-	_out_dbg_.key = crc32(outf);
-	_out_dbg_.name = outf;
-	_out_dbg_.next = _out_dbg;
-	
-	puts("Writing output...");
-	WriteQB (output, outf);
+	QDbg dbgmain;
+	void*_out_dbg = 0; // more weirding
 	if (writedbg)
 	{
+		_out_dbg = &dbgmain;
+	}
+	QNode output = eval_scr(load(argv[1]),_out_dbg);
+	
+	puts("Writing output...");
+	WriteQB(output, outf);
+	if (writedbg)
+	{
+		QLOCAL(QDbg) _out_dbg_; // insert scriptname param
+		char*namedbg = outf;
+		if (scriptname)
+			namedbg = scriptname;
+		_out_dbg_.key = crc32(namedbg);
+		_out_dbg_.name = namedbg;
+		_out_dbg_.next = dbgmain;
+		
 		// stupid for no reason complicated thing
 		register int nameNoExt_len = (int)(strrchr(argv[1], '.') - argv[1]) * -1;
-		register char* nameWithDbg = memcpy(malloc(nameNoExt_len+5),argv[1],nameNoExt_len);
+		register char* nameWithDbg = (char*)memcpy(malloc(nameNoExt_len+5),argv[1],nameNoExt_len);
 		*(int*)(&nameWithDbg[nameNoExt_len]) = 0x6762642E; // '.dbg'
+		// main.c:162: warning: multi-character character constant NO ONE CARES
 		nameWithDbg[nameNoExt_len+4] = 0;
 		
 		puts("Writing additional debug file...\n");
@@ -122,41 +168,4 @@ _start()
 	
 	puts("Done");
 	return 0;
-	
-	
-	// SPECIFIC LEFTOVER TESTING
-	
-	/*puts("Tests");
-	puts("CRC generation:");
-	static char*printtest = "%16s: %08X\n";
-	// TCC NEEDS STRING POOLING
-	static char*testkeys[] = {
-		"none",
-		"wesle",
-		"wesley",
-		"fastgh3",
-		"player"
-	};
-	for (int i = 0; i < 5; i++)
-		printf(printtest, testkeys[i], crc32(testkeys[i]));*/
-	// wish i could use gets in this case
-	// but also multiline ops would break (literally)
-	
-	#if 0
-	QDbg test1;
-	QNode test0 = eval_scr(load("testfile.q"),&test1);
-	const char*fname = "testfile.qb";
-	puts("\nDebug keys:\n");
-	__static_QDbg test1_; // insert my filename
-	test1_.key = crc32(fname);
-	test1_.name = fname;
-	test1_.next = test1;
-	for (QDbg test2 = &test1_; test2 && test2->next; NextItem(test2))
-	{
-		printf("0x%08x %s\n", test2->key, test2->name);
-	}
-	WriteQB(test0, "testfile.qb");
-	WriteDBG(&test1_, "testfile.dbg");
-	getc(stdin); // system pause
-	#endif
 }
