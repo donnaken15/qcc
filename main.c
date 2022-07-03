@@ -33,9 +33,12 @@ _start()
 				"usage:\n"
 				"qcc [script file]\n\n"
 				"optional arguments:\n"
-				"    --out [file]   - specify output\n"
+				"    --out  [file]  - specify output\n"
 				"    --dbg          - generate debug file\n"
 				"    --name [name]  - specify debug name");
+				// optimize this too?
+				// since the switch names
+				// practically exist twice
 		return;
 	}
 	FILE*fscr = fopen(argv[1],"r");

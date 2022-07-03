@@ -9,8 +9,8 @@
 
 int die()
 {
-	puts("Press a key to exit");
-	getc(stdin);
+	//puts("Press a key to exit");
+	//getc(stdin);
 	exit(1);
 }
 
@@ -48,6 +48,7 @@ uint _sizeofQNode = QSIZEOF(QNode) - 4;
 
 char*tmpname;
 
+char*print4digit = "%4u\n";
 //#define eputs(t) fputs(t,stderr)
 void eputs(char*t) //chart lol
 {
@@ -406,6 +407,36 @@ void toknextInexist(QToken tok, uint depth)
 		die();
 	}
 }
+void VarDef_check_err(char* str0, int depth, int assert)
+{
+	if (!assert)
+		return;
+	qlogx(print4digit, depth);
+	printErrorHead(depth);
+	eputs(str0);
+	eputs(" when declaring variable.\n");
+	die();
+}
+void parseSyntaxNext(QToken*tok, uint*depth)
+{
+	toknextInexist(*tok,*depth);
+	NextItem((*tok));
+	(*depth)++;
+}
+char*VarDef_err1_str0 = "Encountered non QbKey name";
+char*VarDef_err1_str1 = "Assignment operation not found";
+char*VarDef_err1_str2 = "Type mismatch\n";
+char*Unclosedstatement = "Unclosed statement\n";
+void checkStatementCapoff(QToken tok, uint depth)
+{
+	if (tok->type != QTokOp || tok->op != QOpSEnd)
+	{
+		qlogx(print4digit, depth);
+		printErrorHead(depth);
+		eputs(Unclosedstatement);
+		die();
+	}
+}
 QNode parse(QToken tok)
 {
 	QNode items = malloc(QSIZEOF(QNode));
@@ -425,7 +456,6 @@ QNode parse(QToken tok)
 			//qlogx("      op   , type :   %2u\n", tok->op);
 			switch (tok->nkey)
 			{
-				static char*VarDef_err1_end = " when declaring variable.\n";
 				// Parse 32-bit vars
 				{
 					//
@@ -441,34 +471,18 @@ QNode parse(QToken tok)
 					// variable declaration
 					node->type = QTypeInt;
 				Var32Define:; // <-- lol V
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
+					parseSyntaxNext(&tok,&tokdepth);
 					// int player = 0;
 					//     ------
-					if (tok->type != QTokKey)
-					{
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Encountered non QbKey name");
-						goto VarDef_err1;
-					}
+					VarDef_check_err(VarDef_err1_str0,
+						tokdepth,tok->type != QTokKey);
 					node->name = tok->nkey;
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
+					parseSyntaxNext(&tok,&tokdepth);
 					// int player = 0;
 					//            -
-					if (tok->type != QTokOp || tok->op != QOpSet)
-					{
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Assignment operation not found");
-						goto VarDef_err1;
-					}
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
+					VarDef_check_err(VarDef_err1_str1,
+						tokdepth,tok->type != QTokOp || tok->op != QOpSet);
+					parseSyntaxNext(&tok,&tokdepth);
 					// int player = 0;
 					//              -
 					// dumb
@@ -487,22 +501,12 @@ QNode parse(QToken tok)
 							goto QAssignNotMatching;
 						break;
 					QAssignNotMatching:
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Value type not matching type of variable\n");
-						die();
+						VarDef_check_err(VarDef_err1_str2,
+							tokdepth,tok->type != QTokOp || tok->op != QOpSet);
 					}
 					node->value = tok->value;
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
-					if (tok->type != QTokOp || tok->op != QOpSEnd)
-					{
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Unclosed statement\n");
-						die();
-					}
+					parseSyntaxNext(&tok,&tokdepth);
+					checkStatementCapoff(tok,tokdepth);
 					qlogx("      New node: %3u, name: %p, value: %p\n",
 						node->type, node->name, node->number);
 					break;
@@ -515,56 +519,27 @@ QNode parse(QToken tok)
 					node->type = QTypeCString;
 					
 					// MAKE THIS A FUNCTION? {
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
+					parseSyntaxNext(&tok,&tokdepth);
 					// string text = "Hello, World!";
 					//        ----
-					if (tok->type != QTokKey)
-					{
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Encountered non QbKey name");
-						goto VarDef_err1;
-					}
+					VarDef_check_err(VarDef_err1_str0,
+						tokdepth,tok->type != QTokKey);
 					node->name = tok->nkey;
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
+					parseSyntaxNext(&tok,&tokdepth);
 					// string text = "Hello, World!";
 					//             -
-					if (tok->type != QTokOp || tok->op != QOpSet)
-					{
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Assignment operation not found");
-						goto VarDef_err1;
-					}
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
+					VarDef_check_err(VarDef_err1_str1,
+						tokdepth,tok->type != QTokOp || tok->op != QOpSet);
+					parseSyntaxNext(&tok,&tokdepth);
 					// }
 					// string text = "Hello, World!";
 					//               ---------------
 					// MAKE THIS A FUNCTION? {
-					if (tok->type != QTokStr)
-					{
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Value type not matching type of variable\n");
-						die();
-					}
+					VarDef_check_err(VarDef_err1_str2,
+						tokdepth,tok->type != QTokStr);
 					node->value = tok->value;
-					toknextInexist(tok,tokdepth);
-					NextItem(tok);
-					tokdepth++;
-					if (tok->type != QTokOp || tok->number != QOpSEnd)
-					{
-						qlogx("%4u\n", tokdepth);
-						printErrorHead(tokdepth);
-						eputs("Unclosed statement\n");
-						die();
-					}
+					parseSyntaxNext(&tok,&tokdepth);
+					checkStatementCapoff(tok,tokdepth);
 					qlogx("      New node: %3u, name: %p, value: %p\n",
 						node->type, node->name, node->number);
 					// }
@@ -574,13 +549,6 @@ QNode parse(QToken tok)
 				default:
 					eputs("Unknown syntax\n");
 					break;
-				
-					if (0)
-					{
-						VarDef_err1:
-						eputs(VarDef_err1_end);
-						die();
-					}
 			}
 			break;
 		case QTokEOF:
