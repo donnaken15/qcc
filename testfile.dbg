@@ -2,32 +2,13 @@
 
 [Checksums]
 0x3c955935 testfile.qb
-0x806fff30 none
-0x3a833bc1 show_gpu_time
-0x2c801951 output_gpu_log
-0xbec9353b show_cpu_time
-0x9785861a show_play_log
-0xa793b469 play_log_lines
-0x663a3ec2 show_guitar_tilt
-0x3a6d9636 nxwatson_channels
-0x52bfce7b output_song_stats
-0xadb62fe2 show_sensor_debug
-0xab76e33e player1_device
-0x25f9e4dd player2_device
-0x03a17838 current_song
-0x4c1e7569 fastgh3
-0x9b2f5962 current_difficulty
-0xb0e46cbd expert
-0x6bf07ead current_difficulty2
-0xc10b44e8 current_level
-0x802a5304 load_z_viewer
-0x8e3d600e current_highway
-0x2430e58b highway
-0x5fd80edc current_time
-0x6d735468 current_deltatime
-0x0a4dd04a current_starttime
-0x018c3eb8 current_endtime
-0x16d91bc1 current_speedfactor
-0x76ebdc31 my_int
-0x5a9c13ae my_float
+0xebae254e int
+0x696fe0ab number
+0x365aa16a float
+0x3558d8e6 single
+0x19918cae qbkey
+0x651533ec level
+0xfca353aa viewer
+0x61414d56 string
+0xc4745838 text
 

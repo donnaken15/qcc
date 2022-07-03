@@ -31,6 +31,12 @@ __inline Eswap(int value)
 			((value & 0xFF000000) >> 24);
 }
 
+char*fnull =
+	"\0\0\0\0"
+	"\0\0\0\0"
+	"\0\0\0\0"
+	"\0\0\0\0";
+
 // APPARENTLY I CAN'T DEFINE, LIKE, IMMEDIATE ASSIGNED VARS IN THE .h FILE FOR SOME REASON
 char qhead[] = {
 	0x1C, 0x08, 0x02, 0x04, 0x10, 0x04, 0x08, 0x0C,
@@ -51,7 +57,7 @@ void eputs(char*t) //chart lol
 // and because IOB
 #define eprintf(...) fprintf(stderr, __VA_ARGS__)
 
-#define Qlogging 0
+#define Qlogging 1
 
 #if (Qlogging == 1)
 #define qlog(t) eputs(t)
@@ -176,11 +182,13 @@ charfilter(char c)
 	if ((c >= '0' && c <= '9') || c == '.' || c == '-')
 		return CF_Number;
 	if (c == '=' || c == ';' ||
-		c >= '(' || c >= ')' ||
-		c >= '{' || c >= '}' ||
-		c >= '[' || c >= ']')
+		c == '(' || c == ')' ||
+		c == '{' || c == '}' ||
+		c == '[' || c == ']') // why did i put >= before
 		return CF_Syntax;
-	if (c == '\n' || !c)
+	if (c == '"' || c == '\'')
+		return CF_String;
+	if (c == '\n' || c == '\r' || !c)
 		return CF_None;
 }
 char*tokenErrorHead = "ERROR @ Tokenizer: \"%s\"\n";
@@ -198,7 +206,7 @@ char*tokenize(char*text, QToken out)
 	{
 		if (*(text+1) == '/')
 		{
-			qlog("got comment,");
+			qlog("got comment,\n      ");
 			text++;
 			do {
 				text++;
@@ -206,7 +214,7 @@ char*tokenize(char*text, QToken out)
 		}
 		else if (*(text+1) == '*')
 		{
-			qlog("got multiline comment, ");
+			qlog("got multiline comment,\n      ");
 			text++;
 			text++;
 			do {
@@ -246,73 +254,22 @@ char*tokenize(char*text, QToken out)
 	char*num  = text;
 	int  dgt  = 0;
 	int  dec  = 0;
+	//CF_String scope
+	char*ss = text+1;
+	int  sl = 0;
+	char wc = '"'; // wrapping character
+	char*trim;
 	switch (charfilter(*text))
 	{
-		//  identifier
-	case CF_Alphabet:
+		// identifier/key
+	case CF_Alphabet: // "[a]123abc"
 		do {
 			il++;
 			text++;
 			//printf("%u\n", charfilter(*text));
-		} while (charfilter(*text) & CF_Alphanum);
-		*type = QTokOp;
-		// do i even need to do this here instead of just looking for CRC'd keywords
-		// but they're also designated keywords, and it could make it confusing
-		// or something to figure out how to parse (crc("if")) (test == test2)
-		//
-		// ps: i just realized how it would work out in the parser
-		// (found if key, check if user added proper syntax, otherwise throw)
-		// generally CRC can probably make string comparing and other operations faster
-		static char*invkey = "Invalid keyword\n",
-			*kwint = "int",
-			*kwfloat = "float",
-			*kwif = "if",
-			*kwqbkey = "qbkey";
-		if (!strncmp(id, kwint, 3))
-		{
-			if (charfilter(id[3]) != CF_Whitespace)
-			{
-				eprintf(tokenErrorHead,kwint);
-				eputs(invkey);
-				die();
-			}
-			out->op = QOpInt;
-			goto FoundId;
-		}
-		if (!strncmp(id, kwfloat, 5))
-		{
-			if (charfilter(id[5]) != CF_Whitespace)
-			{
-				eprintf(tokenErrorHead,kwfloat);
-				eputs(invkey);
-				die();
-			}
-			out->op = QOpFloat;
-			goto FoundId;
-		}
-		if (!strncmp(id, kwif, 2))
-		{
-			if (charfilter(id[2]) != CF_Whitespace)
-			{
-				eprintf(tokenErrorHead,kwif);
-				eputs(invkey);
-				die();
-			}
-			out->op = QOpIf;
-			goto FoundId;
-		}
-		if (!strncmp(id, kwqbkey, 5))
-		{
-			if (charfilter(id[5]) != CF_Whitespace)
-			{
-				eprintf(tokenErrorHead,kwqbkey);
-				eputs(invkey);
-				die();
-			}
-			out->op = QOpKey;
-			goto FoundId;
-		}
-		*type = QTokKey; // last resort
+		} while (charfilter(*text) & CF_Alphanum); //"a[123abc]"
+		
+		*type = QTokKey;
 
 		char*keySZ = malloc(il + 1);//can i not do this
 		strncpy(keySZ, id, il);
@@ -323,48 +280,6 @@ char*tokenize(char*text, QToken out)
 	FoundId:
 		qlogx("new token: %2u, value: %08X, string: %2u: %.*s\n",
 			*type, out->value, il, il, id);
-		break;
-	case CF_Syntax:
-		*type = QTokOp;
-		//if (il == 1)oops
-		{
-			switch (*text)
-			{
-			case '=':
-				if (text[1] == '=')
-				{
-					text++;
-					out->op = QOpCmp;
-					break;
-				}
-				out->op = QOpSet;
-				break;
-			case ';':
-				out->op = QOpSEnd;
-				break;
-			case '(':
-				out->op = QOpPBeg;
-				break;
-			case ')':
-				out->op = QOpPEnd;
-				break;
-			case '{':
-				out->op = QOpBBeg;
-				break;
-			case '}':
-				out->op = QOpBEnd;
-				break;
-			case '[':
-				out->op = QOpABeg;
-				break;
-			case ']':
-				out->op = QOpAEnd;
-				break;
-			}
-		}
-		qlogx("new token: %2u, value:      %3u, string:  1: %c\n",
-			*type, out->value, *text);
-		text++;
 		break;
 	case CF_Number:
 		do {
@@ -404,7 +319,75 @@ char*tokenize(char*text, QToken out)
 		qlogx("new token: %2u, value: %08X, string: %2u: %.*s\n",
 			*type, out->value, dgt, dgt, num);
 		break;
+	case CF_String:
+		// i dont care about allowing widechar/unicode
+		// right now, so " and ' are treated the same
+		*type = QTokStr;
+		{
+			switch (*text)
+			{
+			case '\'':
+				wc = '\'';
+			case '"':
+				do { text++; }
+				while (*text != wc && *text);
+				sl = text-ss;
+				trim = malloc(++sl);
+				trim[--sl] = 0;
+				strncpy(trim,ss,sl);
+				out->string = trim;
+				break;
+			}
+		}
+		qlogx("new token: %2u, str  : %3u: \"%s\"\n",
+			*type, sl, trim);
+		text++;
+		break;
+	case CF_Syntax:
+		*type = QTokOp;
+		{
+			switch (*text)
+			{
+			case '=':
+				if (text[1] == '=')
+				{
+					text++;
+					out->op = QOpCmp;
+					break;
+				}
+				out->op = QOpSet;
+				break;
+			case ';':
+				out->op = QOpSEnd;
+				break;
+			case '(':
+				out->op = QOpPBeg;
+				break;
+			case ')':
+				out->op = QOpPEnd;
+				break;
+			case '{':
+				out->op = QOpBBeg;
+				break;
+			case '}':
+				out->op = QOpBEnd;
+				break;
+			case '[':
+				out->op = QOpABeg;
+				break;
+			case ']':
+				out->op = QOpAEnd;
+				break;
+			}
+		}
+		qlogx("new token: %2u, value:      %3u, string:  1: %c\n",
+			*type, out->value, *text);
+		text++;
+		break;
 	case CF_None:
+		break;
+	default:
+		eputs("Unknown characters");
 		break;
 	}
 	return text;
@@ -413,16 +396,18 @@ void printErrorHead(uint depth)
 {
 	eprintf("ERROR @ Parser: token %3u\n", depth);
 }
-void exitOnPrematEnd(uint depth)
+void toknextInexist(QToken tok, uint depth)
 {
-	static char*PrematEnd = "Unexpected end of input\n";
-	printErrorHead(depth);
-	eputs(PrematEnd);
-	die();
+	if (!tok->next)
+	{
+		static char*PrematEnd = "Unexpected end of input\n";
+		printErrorHead(depth);
+		eputs(PrematEnd);
+		die();
+	}
 }
 QNode parse(QToken tok)
 {
-	qlog("parsing:\n");
 	QNode items = malloc(QSIZEOF(QNode));
 	QNode node = items;
 	uint tokdepth = 0;
@@ -436,108 +421,174 @@ QNode parse(QToken tok)
 		qlogx("%4u: token: type: %2u, %p\n", tokdepth, tok->type, tok->value);
 		switch (tok->type)
 		{
-		case QTokOp:
-			qlogx("      op   , type :   %2u\n", tok->op);
-			switch (tok->op)
+		case QTokKey:
+			//qlogx("      op   , type :   %2u\n", tok->op);
+			switch (tok->nkey)
 			{
-				// int player = 0;
-				// ---
-			case QOpFloat:
-				node->type = QTypeFloat;
-				goto VarDefine;
-			case QOpKey:
-				node->type = QTypeQbKey;
-				goto VarDefine;
-			case QOpInt:
-				// variable declaration
-				node->type = QTypeInt;
-			VarDefine:; // <-- lol V
 				static char*VarDef_err1_end = " when declaring variable.\n";
-				if (!tok->next)
+				// Parse 32-bit vars
 				{
-					exitOnPrematEnd(tokdepth);
-				}
-				NextItem(tok);
-				tokdepth++;
-				qlogx("%4u\n", tokdepth);
-				// int player = 0;
-				//     ------
-				if (tok->type != QTokKey)
-				{
-					printErrorHead(tokdepth);
-					eputs("Encountered non QbKey name");
-					eputs(VarDef_err1_end);
-					die();
-				}
-				node->name = tok->nkey;
-				if (!tok->next)
-				{
-					exitOnPrematEnd(tokdepth);
-				}
-				NextItem(tok);
-				tokdepth++;
-				qlogx("%4u\n", tokdepth);
-				// int player = 0;
-				//            -
-				if (tok->type != QTokOp || tok->op != QOpSet)
-				{
-					printErrorHead(tokdepth);
-					eputs("Assignment operation not found");
-					eputs(VarDef_err1_end);
-					die();
-				}
-				if (!tok->next)
-				{
-					exitOnPrematEnd(tokdepth);
-				}
-				NextItem(tok);
-				tokdepth++;
-				qlogx("%4u\n", tokdepth);
-				// int player = 0;
-				//              -
-				// dumb
-				switch (node->type)
-				{
-				case QTypeInt:
-					if (tok->type != QTokInt)
-						goto QAssignNotMatching;
-					break;
-				case QTypeQbKey:
+					//
+					// int player = 0;
+					// ---
+				case CRCD(0x365AA16A,"float"):
+					node->type = QTypeFloat;
+					goto Var32Define;
+				case CRCD(0x19918CAE,"qbkey"):
+					node->type = QTypeQbKey;
+					goto Var32Define;
+				case CRCD(0xEBAE254E,"int"):
+					// variable declaration
+					node->type = QTypeInt;
+				Var32Define:; // <-- lol V
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					// int player = 0;
+					//     ------
 					if (tok->type != QTokKey)
-						goto QAssignNotMatching;
-					break;
-				case QTypeFloat:
-					if (tok->type != QTokFloat)
-						goto QAssignNotMatching;
-					break;
-				QAssignNotMatching:
-					printErrorHead(tokdepth);
-					eputs("Value type not matching type of variable\n");
-					die();
+					{
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Encountered non QbKey name");
+						goto VarDef_err1;
+					}
+					node->name = tok->nkey;
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					// int player = 0;
+					//            -
+					if (tok->type != QTokOp || tok->op != QOpSet)
+					{
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Assignment operation not found");
+						goto VarDef_err1;
+					}
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					// int player = 0;
+					//              -
+					// dumb
+					switch (node->type)
+					{
+					case QTypeInt:
+						if (tok->type != QTokInt)
+							goto QAssignNotMatching;
+						break;
+					case QTypeQbKey:
+						if (tok->type != QTokKey)
+							goto QAssignNotMatching;
+						break;
+					case QTypeFloat:
+						if (tok->type != QTokFloat)
+							goto QAssignNotMatching;
+						break;
+					QAssignNotMatching:
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Value type not matching type of variable\n");
+						die();
+					}
+					node->value = tok->value;
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					if (tok->type != QTokOp || tok->op != QOpSEnd)
+					{
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Unclosed statement\n");
+						die();
+					}
+					qlogx("      New node: %3u, name: %p, value: %p\n",
+						node->type, node->name, node->number);
 					break;
 				}
-				node->value = tok->value;
-				if (!tok->next)
+				// dynamic values
 				{
-					exitOnPrematEnd(tokdepth);
+				// string text = "Hello, World!";
+				// ------
+				case CRCD(0x61414D56,"string"):
+					node->type = QTypeCString;
+					
+					// MAKE THIS A FUNCTION? {
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					// string text = "Hello, World!";
+					//        ----
+					if (tok->type != QTokKey)
+					{
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Encountered non QbKey name");
+						goto VarDef_err1;
+					}
+					node->name = tok->nkey;
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					// string text = "Hello, World!";
+					//             -
+					if (tok->type != QTokOp || tok->op != QOpSet)
+					{
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Assignment operation not found");
+						goto VarDef_err1;
+					}
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					// }
+					// string text = "Hello, World!";
+					//               ---------------
+					// MAKE THIS A FUNCTION? {
+					if (tok->type != QTokStr)
+					{
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Value type not matching type of variable\n");
+						die();
+					}
+					node->value = tok->value;
+					toknextInexist(tok,tokdepth);
+					NextItem(tok);
+					tokdepth++;
+					if (tok->type != QTokOp || tok->number != QOpSEnd)
+					{
+						qlogx("%4u\n", tokdepth);
+						printErrorHead(tokdepth);
+						eputs("Unclosed statement\n");
+						die();
+					}
+					qlogx("      New node: %3u, name: %p, value: %p\n",
+						node->type, node->name, node->number);
+					// }
+					break;
 				}
-				NextItem(tok);
-				tokdepth++;
-				qlogx("%4u\n", tokdepth); // v stupid TCC
-				if (tok->type != QTokOp || (int)(tok->value) != QOpSEnd)
-				{
-					printErrorHead(tokdepth);
-					eputs("Unclosed statement\n");
-					die();
-				}
-				qlogx("      New node: %3u, name: %p, value: %p\n",
-					node->type, node->name, node->number);
-				break;
+				
+				default:
+					eputs("Unknown syntax\n");
+					break;
+				
+					if (0)
+					{
+						VarDef_err1:
+						eputs(VarDef_err1_end);
+						die();
+					}
 			}
 			break;
 		case QTokEOF:
 			node->next = (void*)0xFFFFFFFF;
-			break;
+			goto EndItAll;
+		//default:
+			//eputs("Unknown token\n");
+			//break;
 		}
 		if (tok->next)
 		{
@@ -547,6 +598,7 @@ QNode parse(QToken tok)
 		NextItem(tok);
 		tokdepth++;
 	}
+	EndItAll:
 	return items;
 }
 checkdbg(QDbg dbg,uint key)
@@ -571,7 +623,8 @@ QNode eval_scr(char*scr, QDbg*dbg)
 	QDbg tmpdbg;
 	if (dbg)
 		tmpdbg = *dbg;
-	qlog("eval / tokenizing:\n");
+	qlog("eval:\n");
+	qlog("tokenizing:\n");
 	while (*lp)
 	{
 		if (!firstitem)
@@ -622,6 +675,7 @@ QNode eval_scr(char*scr, QDbg*dbg)
 		}
 	}
 #endif
+	qlog("parsing:\n");
 	QNode items = parse(tokens);
 	return items;
 }
@@ -634,14 +688,32 @@ void WriteQB(QNode items, char*fname)
 	memcpy(&qbin->head.unknown, qhead, sizeof(qhead)); // why even
 	FILE*qf = fopen(fname, "wb");
 	fwrite(qbin, sizeof(QHead), 1, qf);
-	for (; items && items->next != (void*)0xFFFFFFFF; NextItem(items))
+	for (; items && items->next != (void*)-1; NextItem(items))
 	{
-		//              v            v  more stupid
-		items->value = (void*)Eswap((uint)items->value);
-		// cant get rid of the warning, so, too bad
 		items->name = Eswap(items->name);
-		fwrite(items, _sizeofQNode, 1, qf);
-		items->value = (void*)Eswap((uint)items->value);
+		if (items->type == QTypeCString)
+		{
+			char*test = items->string;
+			items->number = Eswap(ftell(qf)+0x14);
+			fwrite(items, _sizeofQNode, 1, qf);
+			items->string = test;
+			fwrite(test, 1, strlen(test), qf);
+			int align = ftell(qf);
+			if (align&3)
+			{
+				fwrite(fnull, 1, 4-(align&3), qf);
+			}
+			else
+			{
+				fwrite(fnull, 1, 4, qf);
+			}
+		}
+		else
+		{
+			items->number = Eswap(items->number);
+			fwrite(items, _sizeofQNode, 1, qf);
+			items->number = Eswap(items->number);
+		}
 		items->name = Eswap(items->name);
 	}
 	qbin->head.size = ftell(qf);

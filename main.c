@@ -46,13 +46,14 @@ _start()
 		return 3;
 	}
 	fclose(fscr);
-	// <strikeout>should the script file really be a non-1st argument</strikeout>
 	char*outf = 0;
 	char*scriptname = 0;
 	// convenient for if the program
 	// runs at the root path of a scripts folder
 	// so just "scripts\guitar\guitar.qb" can be input
 	// without specifying it via --name switch
+	//
+	// still had to use the switch in qbuild anyway |:|
 	char writedbg = 0;
 	
 	char switchcount = 3;

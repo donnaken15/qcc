@@ -42,7 +42,7 @@ enum QOps {
 typedef struct {
 	union {
 		unk   value;
-		QKey  nkey;
+		QKey  nkey; // i dont know/forget why i named this specifically as it is
 		int   number;
 		float single;
 		char* string;
@@ -61,10 +61,12 @@ typedef struct {
 	uint x278081F3;
 	union {
 		unk   value;
-		uint  key;
+		QKey  key;
 		int   number;
 		float single;
-		char* string;
+		char* string; //
+		void* data;   // for variable length data (strings,structs)
+		              // this makes this value simply a pointer to the data
 	};
 	uint pad10;
 	void*next;
@@ -119,8 +121,12 @@ enum CharFilters {
 				 // but im also checking one character at a time with this
 				 // though then later enums & 0b11 are not allowed then
 	CF_Syntax = 0b000100,
+	CF_String = 0b001000,
 	CF_None = 0x80000000
 };
+
+#define CRCD(c,s) c
+// :p
 
 __inline Eswap(int);
 #define ESWAP(i) (((i & 0xFF) << 24) | ((i & 0xFF00) << 8) | ((i & 0xFF0000) >> 8) | ((i & 0xFF000000) >> 24))
