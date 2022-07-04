@@ -23,7 +23,7 @@ bytes to use a standalone function
 when i used it with values that
 aren't constants
 */
-__inline Eswap(int value)
+Eswap(int value)
 {
 	return ((value & 0xFF) << 24) |
 			((value & 0xFF00) << 8) |
@@ -32,9 +32,6 @@ __inline Eswap(int value)
 }
 
 char*fnull =
-	"\0\0\0\0"
-	"\0\0\0\0"
-	"\0\0\0\0"
 	"\0\0\0\0";
 
 // APPARENTLY I CAN'T DEFINE, LIKE, IMMEDIATE ASSIGNED VARS IN THE .h FILE FOR SOME REASON
@@ -45,6 +42,7 @@ char qhead[] = {
 };
 uint _sizeofQToken = QSIZEOF(QToken) - 4; // for use with binary writing
 uint _sizeofQNode = QSIZEOF(QNode) - 4;
+uint _sizeofQArray = QSIZEOF(QArray);
 
 char*tmpname;
 
@@ -58,8 +56,6 @@ void eputs(char*t) //chart lol
 // and because IOB
 #define eprintf(...) fprintf(stderr, __VA_ARGS__)
 
-#define Qlogging 1
-
 #if (Qlogging == 1)
 #define qlog(t) eputs(t)
 #define qlogx(...) fprintf(stderr, __VA_ARGS__)
@@ -67,8 +63,6 @@ void eputs(char*t) //chart lol
 #define qlog(t)
 #define qlogx(...)
 #endif
-
-#define PREGEN_CRCTAB 0
 
 #if (PREGEN_CRCTAB == 1)
 // pulled straight from tony hawk
@@ -185,7 +179,8 @@ charfilter(char c)
 	if (c == '=' || c == ';' ||
 		c == '(' || c == ')' ||
 		c == '{' || c == '}' ||
-		c == '[' || c == ']') // why did i put >= before
+		c == '[' || c == ']' ||
+		c == ',') // why did i put >= before
 		return CF_Syntax;
 	if (c == '"' || c == '\'')
 		return CF_String;
@@ -267,13 +262,12 @@ char*tokenize(char*text, QToken out)
 		do {
 			il++;
 			text++;
-			//printf("%u\n", charfilter(*text));
 		} while (charfilter(*text) & CF_Alphanum); //"a[123abc]"
 		
 		*type = QTokKey;
 
-		char*keySZ = malloc(il + 1);//can i not do this
-		strncpy(keySZ, id, il);
+		char*keySZ = malloc(++il);// can i not do this
+		strncpy(keySZ, id, --il);
 		keySZ[il] = 0;
 		out->nkey = crc32(keySZ);
 		tmpname = keySZ;
@@ -361,6 +355,9 @@ char*tokenize(char*text, QToken out)
 			case ';':
 				out->op = QOpSEnd;
 				break;
+			case ',':
+				out->op = QOpDlim;
+				break;
 			case '(':
 				out->op = QOpPBeg;
 				break;
@@ -425,7 +422,8 @@ void parseSyntaxNext(QToken*tok, uint*depth)
 }
 char*VarDef_err1_str0 = "Encountered non QbKey name";
 char*VarDef_err1_str1 = "Assignment operation not found";
-char*VarDef_err1_str2 = "Type mismatch\n";
+char*VarDef_err1_str2 = "Type mismatch or invalid syntax";
+char*VarDef_err1_str3 = "Mistyped array syntax";
 char*Unclosedstatement = "Unclosed statement\n";
 void checkStatementCapoff(QToken tok, uint depth)
 {
@@ -448,7 +446,6 @@ QNode parse(QToken tok)
 		node->x278081F3 = ESWAP(0x278081F3); //BE
 		node->pad10 = 0;
 		node->next = 0;
-		//node->type = tok->type;
 		qlogx("%4u: token: type: %2u, %p\n", tokdepth, tok->type, tok->value);
 		switch (tok->type)
 		{
@@ -474,6 +471,26 @@ QNode parse(QToken tok)
 					parseSyntaxNext(&tok,&tokdepth);
 					// int player = 0;
 					//     ------
+					// or
+					// int[] numbers = [ 0,0,0 ];
+					//    -
+					char isArray = 0;
+					if (tok->type == QTokOp &&
+						tok->op == QOpABeg)
+					{
+						//eputs("A\n");
+						parseSyntaxNext(&tok,&tokdepth);
+						// int[] numbers = [ 0,0,0 ];
+						//     -
+						VarDef_check_err(VarDef_err1_str3,
+							tokdepth,
+								tok->type == QTokOp &&
+								tok->op != QOpAEnd);
+						isArray = 1;
+						parseSyntaxNext(&tok,&tokdepth);
+						// int[] numbers = [ 0,0,0 ];
+						//       -------
+					}
 					VarDef_check_err(VarDef_err1_str0,
 						tokdepth,tok->type != QTokKey);
 					node->name = tok->nkey;
@@ -485,30 +502,111 @@ QNode parse(QToken tok)
 					parseSyntaxNext(&tok,&tokdepth);
 					// int player = 0;
 					//              -
-					// dumb
-					switch (node->type)
+					if (isArray)
 					{
-					case QTypeInt:
-						if (tok->type != QTokInt)
-							goto QAssignNotMatching;
-						break;
-					case QTypeQbKey:
-						if (tok->type != QTokKey)
-							goto QAssignNotMatching;
-						break;
-					case QTypeFloat:
-						if (tok->type != QTokFloat)
-							goto QAssignNotMatching;
-						break;
-					QAssignNotMatching:
-						VarDef_check_err(VarDef_err1_str2,
-							tokdepth,tok->type != QTokOp || tok->op != QOpSet);
+						// int player = [ 0,0,0 ];
+						//              -
+						VarDef_check_err(VarDef_err1_str3,
+							tokdepth,
+								tok->type == QTokOp &&
+								tok->op != QOpABeg);
+						parseSyntaxNext(&tok,&tokdepth);
+						// int player = [ 0,0,... ];
+						//                -
+						
+						QArray arr = malloc(QSIZEOF(QArray));
+						node->data = arr;
+						arr->always01 = 0x0100;
+						arr->type = node->type;
+						node->type = QTypeQbArray;
+						arr->data = malloc(1<<2);
+						arr->count = 0;
+						
+						qlog("      got array\n");
+						
+						if (tok->type == QTokOp &&
+							tok->op == QOpAEnd)
+						{
+							goto ZeroValues;
+						}
+						while (1)
+						{
+							// int player = [ 0,0,... ];
+							//                -
+							switch (node->type)
+							{
+							case QTypeInt:
+								if (tok->type != QTokInt)
+									goto QArrAssignNotMatching;
+								break;
+							case QTypeQbKey:
+								if (tok->type != QTokKey)
+									goto QArrAssignNotMatching;
+								break;
+							case QTypeFloat:
+								if (tok->type != QTokFloat)
+									goto QArrAssignNotMatching;
+								break;
+							QArrAssignNotMatching:
+								VarDef_check_err(VarDef_err1_str2,
+									tokdepth,1);
+							}
+							arr->data = realloc(arr->data,(arr->count+1)<<2);
+							// ^ could this be wasteful?
+							arr->numbers[arr->count] = tok->number;
+							qlogx("      element %3u: %08X\n",arr->count,tok->number);
+							(arr->count)++;
+							parseSyntaxNext(&tok,&tokdepth);
+							// int player = [ 0,0,... ];
+							//                 -  or  -
+							if (tok->type == QTokOp &&
+								tok->op == QOpDlim)
+							{
+								parseSyntaxNext(&tok,&tokdepth);
+							}
+							else
+								if (tok->type == QTokOp &&
+									tok->op == QOpAEnd)
+							{
+								break;
+							}
+							else
+							{
+								VarDef_check_err(VarDef_err1_str3,
+									tokdepth, 1);
+							}
+							
+						}
 					}
-					node->value = tok->value;
+					else
+					{
+						// dumb
+						switch (node->type)
+						{
+						case QTypeInt:
+							if (tok->type != QTokInt)
+								goto QAssignNotMatching;
+							break;
+						case QTypeQbKey:
+							if (tok->type != QTokKey)
+								goto QAssignNotMatching;
+							break;
+						case QTypeFloat:
+							if (tok->type != QTokFloat)
+								goto QAssignNotMatching;
+							break;
+						QAssignNotMatching:
+							VarDef_check_err(VarDef_err1_str2,
+								tokdepth,1);
+						}
+						node->value = tok->value;
+					}
+					ZeroValues:
 					parseSyntaxNext(&tok,&tokdepth);
 					checkStatementCapoff(tok,tokdepth);
-					qlogx("      New node: %3u, name: %p, value: %p\n",
-						node->type, node->name, node->number);
+					if (!isArray)
+						qlogx("      New node: %3u, name: %p, value: %p\n",
+							node->type, node->name, node->number);
 					break;
 				}
 				// dynamic values
@@ -545,18 +643,19 @@ QNode parse(QToken tok)
 					// }
 					break;
 				}
-				
 				default:
-					eputs("Unknown syntax\n");
-					break;
+					printErrorHead(tokdepth);
+					eputs("Invalid syntax\n");
+					die();
 			}
 			break;
 		case QTokEOF:
 			node->next = (void*)0xFFFFFFFF;
 			goto EndItAll;
-		//default:
-			//eputs("Unknown token\n");
-			//break;
+		default:
+			printErrorHead(tokdepth);
+			eputs("Invalid syntax\n");
+			die();
 		}
 		if (tok->next)
 		{
@@ -632,7 +731,7 @@ QNode eval_scr(char*scr, QDbg*dbg)
 			qlogx("op   , type :   %2u\n", test->op);
 			break;
 		case QTokKey:
-			qlogx("key  , key  : %8X\n", test->nkey);
+			qlogx("key  , key  : %08X\n", test->nkey);
 			break;
 		case QTokInt:
 			qlogx("int  , value: %4u\n", test->number);
@@ -645,6 +744,7 @@ QNode eval_scr(char*scr, QDbg*dbg)
 #endif
 	qlog("parsing:\n");
 	QNode items = parse(tokens);
+	// should i free memory here
 	return items;
 }
 void WriteQB(QNode items, char*fname)
@@ -656,31 +756,54 @@ void WriteQB(QNode items, char*fname)
 	memcpy(&qbin->head.unknown, qhead, sizeof(qhead)); // why even
 	FILE*qf = fopen(fname, "wb");
 	fwrite(qbin, sizeof(QHead), 1, qf);
+	char*test;
+	QArray arr;
 	for (; items && items->next != (void*)-1; NextItem(items))
 	{
 		items->name = Eswap(items->name);
-		if (items->type == QTypeCString)
+		switch (items->type)
 		{
-			char*test = items->string;
-			items->number = Eswap(ftell(qf)+0x14);
-			fwrite(items, _sizeofQNode, 1, qf);
-			items->string = test;
-			fwrite(test, 1, strlen(test), qf);
-			int align = ftell(qf);
-			if (align&3)
-			{
-				fwrite(fnull, 1, 4-(align&3), qf);
-			}
-			else
-			{
-				fwrite(fnull, 1, 4, qf);
-			}
-		}
-		else
-		{
-			items->number = Eswap(items->number);
-			fwrite(items, _sizeofQNode, 1, qf);
-			items->number = Eswap(items->number);
+			// 32 bit / fixed values
+			default:
+				items->number = Eswap(items->number);
+				fwrite(items, _sizeofQNode, 1, qf);
+				items->number = Eswap(items->number);
+				break;
+			// dynamic / pointed values
+			case QTypeCString:
+				test = items->string;
+				items->number = Eswap(ftell(qf)+0x14);
+				fwrite(items, _sizeofQNode, 1, qf);
+				items->string = test;
+				fwrite(test, 1, strlen(test), qf);
+				int align = ftell(qf);
+				if (align&3)
+				{
+					fwrite(fnull, 1, 4-(align&3), qf);
+				}
+				else
+				{
+					fwrite(fnull, 1, 4, qf);
+				}
+				break;
+			case QTypeQbArray:
+				arr = items->data;
+				items->number = Eswap(ftell(qf)+0x14);
+				fwrite(items, _sizeofQNode, 1, qf);
+				items->data = arr;
+				arr->count = Eswap(arr->count);
+				int* ptr = arr->numbers;
+				// weird
+				// and unnecessary just to satisfy stdio
+				arr->numbers = (int*)Eswap(ftell(qf)+0xC);
+				fwrite(arr, _sizeofQArray, 1, qf);
+				arr->count = Eswap(arr->count);
+				for (int i = 0; i < arr->count; i++)
+				{
+					ptr[i] = Eswap(ptr[i]);
+				}
+				fwrite(ptr, sizeof(int), arr->count, qf);
+				break;
 		}
 		items->name = Eswap(items->name);
 	}

@@ -29,12 +29,36 @@ enum QOps {
 	QOpSet,  // =
 	QOpCmp,  // ==
 	QOpSEnd, // ;
+	QOpDlim, // ,
 	QOpPBeg, // (
 	QOpPEnd, // )
 	QOpBBeg, // {
 	QOpBEnd, // }
 	QOpABeg, // [
 	QOpAEnd, // ]
+};
+enum QNodeTypes
+{
+	QTypeUndefined = 0x0,
+	QTypeInt = 0x1,
+	QTypeFloat = 0x2,
+	QTypeCString = 0x3,
+	QTypeWString = 0x4,
+	QTypePair = 0x5,
+	QTypeVector = 0x6,
+	QTypeScript = 0x7,
+	QTypeCFunc = 0x8,
+	QTypeUnk9 = 0x9,
+	QTypeQbStruct = 0xA,
+	QTypeQbArray = 0xC,
+	QTypeQbKey = 0xD,
+	QTypeUnk20 = 0x14,
+	QTypeUnk21 = 0x15,
+	QTypeBinaryTree1 = 0x16,
+	QTypeBinaryTree2 = 0x17,
+	QTypeStringPointer = 0x1A,
+	QTypeQbMap = 0x1B,
+	QTypeQbKeyStringQs = 0x1C,
 };
 
 #define QLOCAL(t) __static_ ## t
@@ -72,6 +96,20 @@ typedef struct {
 	void*next;
 } __static_QNode, *QNode;
 typedef struct {
+	ushort always01;
+	ushort type;
+	uint count;
+	union {
+		unk  * values;
+		QKey * keys;
+		int  * numbers;
+		float* floats;
+		char **strings;
+		void **data;
+		QNode**structs;
+	};
+} __static_QArray, *QArray;
+typedef struct {
 	uint gap;
 	uint size;
 	uint unknown[5];
@@ -80,29 +118,6 @@ typedef struct {
 	QHead head;
 	QNode items;
 } *QFile;
-enum QNodeTypes
-{
-	QTypeUndefined = 0x0,
-	QTypeInt = 0x1,
-	QTypeFloat = 0x2,
-	QTypeCString = 0x3,
-	QTypeWString = 0x4,
-	QTypePair = 0x5,
-	QTypeVector = 0x6,
-	QTypeScript = 0x7,
-	QTypeCFunc = 0x8,
-	QTypeUnk9 = 0x9,
-	QTypeQbStruct = 0xA,
-	QTypeQbArray = 0xC,
-	QTypeQbKey = 0xD,
-	QTypeUnk20 = 0x14,
-	QTypeUnk21 = 0x15,
-	QTypeBinaryTree1 = 0x16,
-	QTypeBinaryTree2 = 0x17,
-	QTypeStringPointer = 0x1A,
-	QTypeQbMap = 0x1B,
-	QTypeQbKeyStringQs = 0x1C,
-};
 #define NextItem(i) /*if (i->next)*/ i = i->next
 
 typedef struct {
@@ -125,10 +140,14 @@ enum CharFilters {
 	CF_None = 0x80000000
 };
 
+#define Qlogging 1
+
+#define PREGEN_CRCTAB 0
+
 #define CRCD(c,s) c
 // :p
 
-__inline Eswap(int);
+Eswap(int);
 #define ESWAP(i) (((i & 0xFF) << 24) | ((i & 0xFF00) << 8) | ((i & 0xFF0000) >> 8) | ((i & 0xFF000000) >> 24))
 QKey crc32(char*);
 void initCRC32();

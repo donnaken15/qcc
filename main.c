@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include "q.h"
 
+char*_read = "r";
+
+
 char*load(char*fname)
 {
-	FILE*lfile = fopen(fname,"rb");
+	FILE*lfile = fopen(fname,_read);
 	fseek(lfile,0,SEEK_END);
 	size_t size = ftell(lfile);
 	rewind(lfile);
@@ -24,12 +27,12 @@ _start()
 {
 	__getmainargs(&argc,&argv,&__env,0);
 	
-	puts("qcc - (WIP) q compiler\n"
-			"by donnaken15\n");
 	// argv[0] = this exe
 	if (argc == 1)
 	{
-		puts("NOTE: C-STYLE SYNTAX\n\n"
+		puts("qcc - (WIP) q compiler\n"
+				"by donnaken15\n\n"
+				"NOTE: C-STYLE SYNTAX\n\n"
 				"usage:\n"
 				"qcc [script file]\n\n"
 				"optional arguments:\n"
@@ -41,7 +44,10 @@ _start()
 				// practically exist twice
 		return;
 	}
-	FILE*fscr = fopen(argv[1],"r");
+	else
+		puts("qcc");
+	char*input = argv[1];
+	FILE*fscr = fopen(input,_read);
 	if (!fscr)
 	{
 		puts("NONEXISTENT FILE!1!!");
@@ -67,6 +73,7 @@ _start()
 			// stuck out *literally* amongst the smaller named params
 		"--dbg"
 	};
+	// CAN'T USE VOID IN GCC
 	void*switchoutvals[] = {
 		&outf,
 		&scriptname,
@@ -118,7 +125,7 @@ _start()
 				}
 			}
 		}
-		if (i == argc) //* |:|
+		if (i >= argc) //* |:|
 			break;
 		if (!doesArgExist)
 		{
@@ -127,8 +134,8 @@ _start()
 	}
 	if (!outf)
 	{
-		register int fnlen = strlen(argv[1])+1;
-		outf = (char*)memcpy(malloc(fnlen+1),argv[1],fnlen);
+		register int fnlen = strlen(input);
+		outf = (char*)memcpy(malloc(++fnlen),input,fnlen);
 		*(short*)(&outf[fnlen-1]) = 0x0062; // 1337 lol // 'b\0'
 	}
 	if (!scriptname)
@@ -138,16 +145,16 @@ _start()
 		initCRC32();
 	#endif
 	
-	printf("Compiling %s...\n",argv[1]);
+	printf("Compiling %s...\n",input);
 	QDbg dbgmain;
 	void*_out_dbg = 0; // more weirding
 	if (writedbg)
 	{
 		_out_dbg = &dbgmain;
 	}
-	QNode output = eval_scr(load(argv[1]),_out_dbg);
+	QNode output = eval_scr(load(input),_out_dbg);
 	
-	puts("Writing output...");
+	//puts("Writing output...");
 	WriteQB(output, outf);
 	if (writedbg)
 	{
@@ -160,16 +167,16 @@ _start()
 		_out_dbg_.next = dbgmain;
 		
 		// stupid for no reason complicated thing
-		register int nameNoExt_len = (int)(strrchr(argv[1], '.') - argv[1]) * -1;
-		register char* nameWithDbg = (char*)memcpy(malloc(nameNoExt_len+5),argv[1],nameNoExt_len);
+		register int nameNoExt_len = (int)(strrchr(input, '.') - input) * -1;
+		register char* nameWithDbg = (char*)memcpy(malloc(nameNoExt_len+5),input,nameNoExt_len);
 		*(int*)(&nameWithDbg[nameNoExt_len]) = 0x6762642E; // '.dbg'
 		// main.c:162: warning: multi-character character constant NO ONE CARES
 		nameWithDbg[nameNoExt_len+4] = 0;
 		
-		puts("Writing additional debug file...\n");
+		//puts("Writing additional debug file...\n");
 		WriteDBG(&_out_dbg_, nameWithDbg);
 	}
 	
-	puts("Done");
+	puts("OK");
 	return 0;
 }
