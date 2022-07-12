@@ -19,12 +19,12 @@ enum QTokenType {
 };
 enum QOps {
 	// should i separate keywords and one symbol operations here
-	QOpIf,   // if
-	QOpInt,  // int
-	QOpFloat,// float
-	QOpKey,  // qbkey
-	QOpStr,  // string
-	QOpStrc, // struct
+	//QOpIf,   // if
+	//QOpInt,  // int
+	//QOpFloat,// float
+	//QOpKey,  // qbkey
+	//QOpStr,  // string
+	//QOpStrc, // struct
 	//QOpPtr,  // qbkeyref
 	QOpSet,  // =
 	QOpCmp,  // ==
@@ -81,8 +81,8 @@ typedef struct {
 typedef struct {
 	ushort always20;
 	ushort type;
-	uint name;
-	uint x278081F3;
+	QKey name;
+	QKey parent;
 	union {
 		unk   value;
 		QKey  key;
@@ -93,7 +93,28 @@ typedef struct {
 		              // this makes this value simply a pointer to the data
 	};
 	uint pad10;
-	void*next;
+	void*next; // should i make it this way
+	           // where every struct that operates
+			   // in a list has next as the last value
+			   // so its easy for a function to interpret
+			   // a vague use of (void*) next in a
+			   // varying sized struct
+			   // using sizeof(struct)-4
+			   // (which would also require NextItem
+			   // changing to function that way)
+			   // and i just realized it works
+			   // the way it does with different
+			   // structs because its preprocessed
+			   // to write out i->next instead
+			   // of using a real function
+			   // actually just realized itd be
+			   // harder since sizeof isnt calculated
+			   // at runtime, then next would need
+			   // to be at a fixed offset
+			   // and then actually mess up
+			   // the writing funcs
+			   // am i talking to myself??
+			   // I NEED A LIFE (AMIRITE)
 } __static_QNode, *QNode;
 typedef struct {
 	ushort always01;
@@ -135,24 +156,47 @@ enum CharFilters {
 	CF_Alphanum, // thought id be clever here to use a bitmask or something
 				 // but im also checking one character at a time with this
 				 // though then later enums & 0b11 are not allowed then
-	CF_Syntax = 0b000100,
-	CF_String = 0b001000,
-	CF_None = 0x80000000
+	CF_Syntax  = 0b000100,
+	CF_String  = 0b001000,
+	CF_Unknown = 0x7FFFFFFC,
+	CF_None    = 0x80000000
 };
+
+#define copy(addr,size) memcpy(malloc(size),addr,size)
 
 #define Qlogging 1
 
 #define PREGEN_CRCTAB 0
 
-#define CRCD(c,s) c
+#define BE 1
+// why even
+
+#define CRCD(c,s) (c)
 // :p
 
-Eswap(int);
+#define FASTCALL_A   __attribute__ ((regparm(1)))
+#define FASTCALL_AD  __attribute__ ((regparm(2)))
+#define FASTCALL_ADC __attribute__ ((regparm(3)))
+#define QSECTION     __attribute__ ((section(".q")))
+// because why not
+
+#if (BE == 1)
+#define BSWAP(i)	__asm__ __volatile__ (\
+		"  mov      %0, %%eax\n"\
+		"  bswap    %%eax\n"\
+		"  mov      %%eax, %0\n"\
+		:"=m"(i)\
+	)
 #define ESWAP(i) (((i & 0xFF) << 24) | ((i & 0xFF00) << 8) | ((i & 0xFF0000) >> 8) | ((i & 0xFF000000) >> 24))
-QKey crc32(char*);
-void initCRC32();
-char*tokenize(char*, QToken);
-QNode parse(QToken);
-QNode eval_scr(char*, QDbg*dbg);
-void WriteQB(QNode, char*);
-void WriteDBG(QDbg dbg, char*fname);
+#else
+#define ESWAP(i) i
+#endif
+QSECTION FASTCALL_A Eswap(int);
+QSECTION FASTCALL_A QKey crc32(char*);
+QSECTION void initCRC32();
+QSECTION FASTCALL_AD  char*tokenize(char*, QToken);
+QSECTION FASTCALL_A   QNode parse(QToken);
+QSECTION FASTCALL_AD  QNode eval_scr(char*, QDbg*dbg);
+QSECTION FASTCALL_ADC void WriteQB(QNode, char*, QKey name);
+QSECTION FASTCALL_AD  void WriteDBG(QDbg dbg, char*fname);
+QSECTION void die();

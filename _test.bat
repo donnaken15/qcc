@@ -12,6 +12,7 @@ qcc testfile.q --dbg
 copy testfile.qb  validator /y > nul
 copy testfile.dbg validator /y > nul
 E:\qtest\bin\pakdir validator  > nul
+move validator.pak validator.pak.xen > nul
 
 pause
 goto :_TEST

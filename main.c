@@ -1,12 +1,24 @@
 
+/**
+ *  \file main.c
+ *  \brief Interface for the code in q.c
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "q.h"
 
 char*_read = "r";
 
-
-char*load(char*fname)
+/**
+ *  \brief Easy file loading to string/byte array
+ *  
+ *  \param [in] fname File name
+ *  \return File contents
+ *  
+ *  \details ez
+ */
+FASTCALL_A char*load(char*fname)
 {
 	FILE*lfile = fopen(fname,_read);
 	fseek(lfile,0,SEEK_END);
@@ -47,6 +59,7 @@ _start()
 	else
 		puts("qcc");
 	char*input = argv[1];
+	// check file existence
 	FILE*fscr = fopen(input,_read);
 	if (!fscr)
 	{
@@ -132,12 +145,16 @@ _start()
 			printf("Unknown switch: %s\n", argv[i]);
 		}
 	}
+	// name file after the input but with .qb
+	// if not specifying output file
 	if (!outf)
 	{
 		register int fnlen = strlen(input);
 		outf = (char*)memcpy(malloc(++fnlen),input,fnlen);
 		*(short*)(&outf[fnlen-1]) = 0x0062; // 1337 lol // 'b\0'
 	}
+	// debug name for the script is the output
+	// file name if not specified manually
 	if (!scriptname)
 		scriptname = outf;
 	
@@ -147,22 +164,21 @@ _start()
 	
 	printf("Compiling %s...\n",input);
 	QDbg dbgmain;
+	char*namedbg = outf;
 	void*_out_dbg = 0; // more weirding
 	if (writedbg)
 	{
 		_out_dbg = &dbgmain;
+		namedbg = scriptname;
 	}
 	QNode output = eval_scr(load(input),_out_dbg);
 	
 	//puts("Writing output...");
-	WriteQB(output, outf);
+	WriteQB(output, outf, crc32(namedbg));
 	if (writedbg)
 	{
 		QLOCAL(QDbg) _out_dbg_; // insert scriptname param
-		char*namedbg = outf;
-		if (scriptname)
-			namedbg = scriptname;
-		_out_dbg_.key = crc32(namedbg);
+		_out_dbg_.key = crc32(namedbg); // should i do this in WriteDBG
 		_out_dbg_.name = namedbg;
 		_out_dbg_.next = dbgmain;
 		
