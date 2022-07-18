@@ -12,5 +12,9 @@
 0x61414d56 string
 0xc4745838 text
 0x304205eb note
+0xe491b7a4 vector
 0xe1caec40 texts
+0x4b71bb13 keys
+0xd95930ac player1_status
+0x57d6374f player2_status
 

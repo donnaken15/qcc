@@ -13,6 +13,23 @@
 // PC format only
 // or atleast (and tested on) GH3
 
+//#define eputs(t) fputs(t,stderr)
+QSECTION FASTCALL_A void eputs(char*t) //chart lol
+{
+	fputs(t,stderr);
+} // saved like 100 bytes not making this a macro :/
+// ofc because stderr is an extra value to push
+// and because IOB
+#define eprintf(...) fprintf(stderr, __VA_ARGS__)
+
+#if (Qlogging == 1)
+#define qlog(t) eputs(t)
+#define qlogx(...) eprintf(__VA_ARGS__)
+#else
+#define qlog(t)
+#define qlogx(...)
+#endif
+
 QSECTION void die()
 {
 	//puts("Press a key to exit");
@@ -75,22 +92,6 @@ const uint _sizeofQArray = QSIZEOF(QArray);
 QSECTION char*tmpname;
 
 QSECTION char*print4digit = "%4u\n";
-//#define eputs(t) fputs(t,stderr)
-QSECTION FASTCALL_A void eputs(char*t) //chart lol
-{
-	fputs(t,stderr);
-} // saved like 100 bytes not making this a macro :/
-// ofc because stderr is an extra value to push
-// and because IOB
-#define eprintf(...) fprintf(stderr, __VA_ARGS__)
-
-#if (Qlogging == 1)
-#define qlog(t) eputs(t)
-#define qlogx(...) eprintf(__VA_ARGS__)
-#else
-#define qlog(t)
-#define qlogx(...)
-#endif
 
 #if (PREGEN_CRCTAB == 1)
 // pulled straight from tony hawk
@@ -469,6 +470,7 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 		text++;
 		break;
 	case CF_Unknown:
+		//if (*text == '`') // check for key enclosed in ``
 	default:
 		eputs("Unknown characters");
 	case CF_None:
@@ -1095,4 +1097,39 @@ QSECTION FASTCALL_AD void WriteDBG(QDbg dbg, char*fname)
 	}
 	fputs(nl, dbgf);
 	fclose(dbgf);
+}
+
+char defsigtext[] = "UNKNOWN\n";
+char*signaltexts[] = {
+	defsigtext,
+	defsigtext,
+	"Interrupted\n",
+	defsigtext,
+	"Aborted\n",
+	defsigtext,
+	"Illegal instruction\n",
+	defsigtext,
+	"Floating point error\n",
+	defsigtext,
+	defsigtext,
+	"Segfault\n",
+	defsigtext,
+	defsigtext,
+	defsigtext,
+	"Terminated\n",
+	defsigtext,
+	defsigtext,
+	defsigtext,
+	defsigtext,
+	defsigtext,
+	defsigtext,
+	"Break\n",
+	"Aborted\n"
+};
+QSECTION void catch(int sig)
+{
+	eputs("EXCEPTION CAUGHT:\n");
+	eputs(signaltexts[sig]);
+	eputs("Exiting\n");
+	die();
 }

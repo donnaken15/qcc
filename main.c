@@ -31,6 +31,14 @@ FASTCALL_A char*load(char*fname)
 	return  out;
 }
 
+// for error handling
+extern char**signaltexts;
+QSECTION siginit()
+{
+	for (char i = 0; i < 22; i++)
+		signal(i,catch);
+}
+
 #define copy(addr,size) memcpy(malloc(size),addr,size)
 
 int   argc;
@@ -58,6 +66,9 @@ _start()
 	}
 	else
 		puts("qcc");
+	
+	siginit();
+	
 	char*input = argv[1];
 	// check file existence
 	FILE*fscr = fopen(input,_read);

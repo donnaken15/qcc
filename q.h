@@ -200,3 +200,4 @@ QSECTION FASTCALL_AD  QNode eval_scr(char*, QDbg*dbg);
 QSECTION FASTCALL_ADC void WriteQB(QNode, char*, QKey name);
 QSECTION FASTCALL_AD  void WriteDBG(QDbg dbg, char*fname);
 QSECTION void die();
+QSECTION void catch();
