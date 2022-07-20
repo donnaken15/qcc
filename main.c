@@ -11,7 +11,7 @@
 char*_read = "r";
 
 /**
- *  \brief Easy file loading to string/byte array
+ *  \brief Easy file loading to string/byte array.
  *  
  *  \param [in] fname File name
  *  \return File contents
@@ -31,19 +31,11 @@ FASTCALL_A char*load(char*fname)
 	return  out;
 }
 
-// for error handling
-extern char**signaltexts;
-QSECTION siginit()
-{
-	for (char i = 0; i < 22; i++)
-		signal(i,catch);
-}
-
 #define copy(addr,size) memcpy(malloc(size),addr,size)
 
 int   argc;
 char**argv, __env;
-_start()
+_start() // main(int argc,char**argv)
 {
 	__getmainargs(&argc,&argv,&__env,0);
 	
@@ -51,23 +43,21 @@ _start()
 	if (argc == 1)
 	{
 		puts("qcc - (WIP) q compiler\n"
-				"by donnaken15\n\n"
-				"NOTE: C-STYLE SYNTAX\n\n"
-				"usage:\n"
-				"qcc [script file]\n\n"
-				"optional arguments:\n"
-				"    --out  [file]  - specify output\n"
-				"    --dbg          - generate debug file\n"
-				"    --name [name]  - specify debug name");
-				// optimize this too?
-				// since the switch names
-				// practically exist twice
+			"by donnaken15\n\n"
+			"NOTE: C-STYLE SYNTAX\n\n"
+			"usage:\n"
+			"qcc [script file]\n\n"
+			"optional arguments:\n"
+			"    --out  [file]  - specify output\n"
+			"    --dbg          - generate debug file\n"
+			"    --name [name]  - specify debug name");
+			// optimize this too?
+			// since the switch names
+			// practically exist twice
 		return;
 	}
 	else
 		puts("qcc");
-	
-	siginit();
 	
 	char*input = argv[1];
 	// check file existence
@@ -103,13 +93,9 @@ _start()
 		&scriptname,
 		&writedbg
 	};
-	char switchextraarg[] = {
-		// 1 = arg+1 string -> switchoutvals
-		// 0 = arg exists bool -> switchoutvals
-		1,
-		1,
-		0
-	};
+	char switchextraarg = 0b00000011;
+	// 1 = arg+1 string -> switchoutvals
+	// 0 = arg exists bool -> switchoutvals
 	for (int i = 2; i < argc; i++)
 	{
 		char doesArgExist = 0;
@@ -117,7 +103,7 @@ _start()
 		{
 			if (!strcmp(argv[i],switchnames[j]))
 			{
-				if (switchextraarg[j])
+				if (switchextraarg & (1<<j))
 				{
 					if (i+1<argc)
 					{

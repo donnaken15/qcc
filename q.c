@@ -8,23 +8,28 @@
 #include <stdlib.h>
 #include <string.h>
 #include "q.h"
-#include <signal.h>
 
 // PC format only
 // or atleast (and tested on) GH3
 
-//#define eputs(t) fputs(t,stderr)
 QSECTION FASTCALL_A void eputs(char*t) //chart lol
 {
 	fputs(t,stderr);
 } // saved like 100 bytes not making this a macro :/
 // ofc because stderr is an extra value to push
 // and because IOB
-#define eprintf(...) fprintf(stderr, __VA_ARGS__)
+QSECTION eprintf(char*fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	int ret = vfprintf(stderr,fmt,args);
+	va_end(args);
+	return ret;
+}
 
 #if (Qlogging == 1)
 #define qlog(t) eputs(t)
-#define qlogx(...) eprintf(__VA_ARGS__)
+#define qlogx(fmt,...) eprintf(fmt,__VA_ARGS__)
 #else
 #define qlog(t)
 #define qlogx(...)
@@ -32,20 +37,13 @@ QSECTION FASTCALL_A void eputs(char*t) //chart lol
 
 QSECTION void die()
 {
-	//puts("Press a key to exit");
-	//getc(stdin);
+#if 0
+	puts("Press a key to exit");
+	getc(stdin);
+#endif
 	exit(1);
 }
 
-/*
-though now i cant use inline :(
-UNLESS SOMEONE WANTS TO ENABLE SUPPORT FOR THAT!
-
-it actually saved me a bunch of
-bytes to use a standalone function
-when i used it with values that
-aren't constants
-*/
 #if (BE == 1)
 /**
  *  \brief Swap endianness of input value
@@ -77,9 +75,6 @@ QSECTION FASTCALL_A Eswap(int _)
 #define Eswap(i) i
 #endif
 
-QSECTION int fnull[] = {0,0,0,0,0,0,0,0};
-
-// APPARENTLY I CAN'T DEFINE, LIKE, IMMEDIATE ASSIGNED VARS IN THE .h FILE FOR SOME REASON
 QSECTION char qhead[] = {
 	0x1C, 0x08, 0x02, 0x04, 0x10, 0x04, 0x08, 0x0C,
 	0x0C, 0x08, 0x02, 0x04, 0x14, 0x02, 0x04, 0x0C,
@@ -190,11 +185,50 @@ QSECTION FASTCALL_A QKey crc32(char*text)
 	{
 		register char sym = text[i]; // ugh
 		if (sym <= 'Z' && sym >= 'A') sym += 0x20;
+		// *thinking that doing less than first will be faster
+		// because its checking values less than 0x80 first
 		else if (sym == '/') sym = '\\';
 		crc = crc >> 8 & 0x00FFFFFF ^ crctable[(crc ^ sym) & 0xFF];
 	}
 	return crc;
 }
+char syntaxChars[] = {
+	'=',
+	';',
+	':',
+	',',
+	'(',
+	')',
+	'{',
+	'}',
+	'[',
+	']',
+	'+',
+	'-',
+	'*',
+	'/',
+	'<',
+	'>',
+	'!'
+};
+/*char syntaxIds[] = { // already in order
+	QOpSet,
+	QOpSEnd,
+	QOpColn,
+	QOpDlim,
+	QOpPBeg,
+	QOpPEnd,
+	QOpBBeg,
+	QOpBEnd,
+	QOpABeg,
+	QOpAEnd,
+	QOpPlus,
+	QOpAstx,
+	QOpDvid,
+	QOpLess,
+	QOpGrtr,
+	QOpNot
+};*/
 QSECTION FASTCALL_A charfilter(char c)
 {
 	switch (c)
@@ -208,18 +242,8 @@ QSECTION FASTCALL_A charfilter(char c)
 			return CF_Alphabet;
 		case '0'...'9':
 		case '.':
-		case '-':
+		case '-': // probably shouldnt put here
 			return CF_Number;
-		case '=': //
-		case ';': //
-		case '(': // ....
-		case ')': //
-		case '{': //
-		case '}': //
-		case '[': //
-		case ']': //
-		case ',': //
-			return CF_Syntax;
 		case '"':
 		case '\'':
 			return CF_String;
@@ -227,36 +251,13 @@ QSECTION FASTCALL_A charfilter(char c)
 		case '\r':
 		case 0:
 			return CF_None;
-		default:
-			return CF_Unknown;
 	}
-	// wtf...
-	// 04 00 00 00 90 89 45 FC 0F BE 45 FC E9 05 00 00 
-	// 00 E9 09 00 00 00 83 F8 20 0F 85 05 00 00 00 E9
-	// 09 00 00 00 83 F8 09 0F 85 0F 00 00 00 B8 00 00
-	// 00 00 E9 6F 01 00 00 E9 12 00 00 00 83 F8 41 0F
-	// 8C 0E 00 00 00 83 F8 5A 0F 8F 05 00 00 00 E9 12
-	// 00 00 00 83 F8 61 0F 8C 0E 00 00 00 83 F8 7A 0F
-	// 8F 05 00 00 00 E9 09 00 00 00 83 F8 5F 0F 85 0F
-	// 00 00 00 B8 02 00 00 00 E9 29 01 00 00 E9 12 00
-	// 00 00 83 F8 30 0F 8C 0E 00 00 00 83 F8 39 0F 8F
-	// 05 00 00 00 E9 09 00 00 00 83 F8 2E 0F 85 05 00
-	// 00 00 E9 09 00 00 00 83 F8 2D 0F 85 0F 00 00 00
-	// B8 01 00 00 00 E9 EC 00 00 00 E9 09 00 00 00 83
-	// F8 3D 0F 85 05 00 00 00 E9 09 00 00 00 83 F8 3B
-	// 0F 85 05 00 00 00 E9 09 00 00 00 83 F8 28 0F 85
-	// 05 00 00 00 E9 09 00 00 00 83 F8 29 0F 85 05 00
-	// 00 00 E9 09 00 00 00 83 F8 7B 0F 85 05 00 00 00
-	// E9 09 00 00 00 83 F8 7D 0F 85 05 00 00 00 E9 09
-	// 00 00 00 83 F8 5B 0F 85 05 00 00 00 E9 09 00 00
-	// 00 83 F8 5D 0F 85 05 00 00 00 E9 09 00 00 00 83
-	// F8 2C 0F 85 0F 00 00 00 B8 04 00 00 00 E9 64 00
-	// 00 00 E9 09 00 00 00 83 F8 22 0F 85 05 00 00 00
-	// E9 09 00 00 00 83 F8 27 0F 85 0F 00 00 00 B8 08
-	// 00 00 00 E9 3E 00 00 00 E9 09 00 00 00 83 F8 0A
-	// 0F 85 05 00 00 00 E9 09 00 00 00 83 F8 0D 0F 85
-	// 05 00 00 00 E9 09 00 00 00 83 F8 00 0F 85 0A 00
-	// 00 00 B8 00 00 00 80 E9 0A 00 00 00
+	for (int i = 0; i < sizeof(syntaxChars); i++)
+	{
+		if (c == syntaxChars[i])
+			return CF_Syntax;
+	}
+	return CF_Unknown;
 }
 QSECTION char*tokenErrorHead = "ERROR @ Tokenizer: \"%s\"\n";
 /**
@@ -274,6 +275,8 @@ QSECTION char*tokenErrorHead = "ERROR @ Tokenizer: \"%s\"\n";
 QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 {
 	int*type = &out->type;
+	// thinking this will be faster than -> every time
+	// because thats compiled like [ebp+16] or something
 	checkForBothWSandCmnts:
 	while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r')
 	{
@@ -319,29 +322,21 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 	}
 	if (!*text)
 	{
-		out->type = QTokEOF;
-		qlog("end of file\n\n");
+		*type = QTokEOF;
 		return text;
 	}
-	//this is dumb
-	//CF_Alphabet scope
-	char*id = text;
-	int  il = 0;
-	//CF_Number scope
-	char*num  = text;
-	int  dgt  = 0;
-	int  dec  = 0;
-	//CF_String scope
-	char*ss = text+1;
-	int  sl = 0;
-	char wc = '"'; // wrapping character
-	char*trim;
 	static char*newTokenPrintHead = "new token: %2u, ";
 	static char*newTokenPrint = "value: %08X, string: %2u: %.*s\n";
 	switch (charfilter(*text))
 	{
 		// identifier/key
 	case CF_Alphabet: // "[a]123abc"
+	{
+		// this works now now that its scoped
+		// in a code block where its actually
+		// discarded after execution
+		char*id = text;
+		int  il = 0;
 		do {
 			il++;
 			text++;
@@ -359,7 +354,21 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 		qlogx(newTokenPrintHead, *type);
 		qlogx(newTokenPrint, out->value, il, il, id);
 		break;
-	case CF_Number:
+	}
+	case CF_Number: //-0.0
+	{
+		// try to assume alternate use first
+		// and that all numbers dont have
+		// spaces in between syntax
+		// as if any sane person does that
+		if (*text == '-')
+		{
+			if (charfilter(text[1]) != CF_Number)
+				goto case_CF_Syntax;
+		}
+		char*num  = text;
+		int  dgt  = 0;
+		int  dec  = 0;
 		do {
 			text++;
 			dgt++;
@@ -396,11 +405,16 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 		}
 		qlogx(newTokenPrint, out->value, dgt, dgt, num);
 		break;
+	}
 	case CF_String:
 		// i dont care about allowing widechar/unicode
 		// right now, so " and ' are treated the same
 		*type = QTokStr;
 		{
+			char*ss = text+1;
+			int  sl = 0;
+			char wc = '"'; // wrapping character, default: "
+			char*trim;
 			switch (*text)
 			{
 			case '\'':
@@ -415,21 +429,17 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 				out->string = trim;
 				break;
 			}
+			qlogx(newTokenPrintHead, *type);
+			qlogx("str  : %3u: \"%s\"\n", sl, trim);
 		}
-		qlogx(newTokenPrintHead, *type);
-		qlogx("str  : %3u: \"%s\"\n", sl, trim);
 		text++;
 		break;
 	case CF_Syntax:
+	case_CF_Syntax:
 		*type = QTokOp;
 		{
 			switch (*text)
 			{
-				// can these be optimized in some way,
-				// looks almost as preposterous as elseif
-				// which is technically what machine code does
-				// too im pretty sure (except for jumptables maybe)
-				// OR MAKE AN INT ARRAY WITH INDEX *text OR SOMETHING
 			case '=':
 				if (text[1] == '=')
 				{
@@ -438,33 +448,19 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 					break;
 				}
 				out->op = QOpSet;
-				break;
-			case ';':
-				out->op = QOpSEnd;
-				break;
-			case ',':
-				out->op = QOpDlim;
-				break;
-			case '(':
-				out->op = QOpPBeg;
-				break;
-			case ')':
-				out->op = QOpPEnd;
-				break;
-			case '{':
-				out->op = QOpBBeg;
-				break;
-			case '}':
-				out->op = QOpBEnd;
-				break;
-			case '[':
-				out->op = QOpABeg;
-				break;
-			case ']':
-				out->op = QOpAEnd;
-				break;
+				goto gotSyntaxId;
+			}
+			// 1 to skip =/== check ^
+			for (int i = 1; i < sizeof(syntaxChars); i++)
+			{
+				if (*text == syntaxChars[i])
+				{
+					out->op = ++i;
+					break;
+				}
 			}
 		}
+		gotSyntaxId:;
 		qlogx(newTokenPrintHead, *type);
 		qlogx("value:      %3u, string:  1: %c\n", out->value, *text);
 		text++;
@@ -523,6 +519,16 @@ QSECTION FASTCALL_AD void checkStatementCapoff(QToken tok, uint depth)
 		die();
 	}
 }
+QSECTION char* newNodePrint = "New node: %3u, name: %p, value: %p\n";
+// somehow doesn't work
+QSECTION void finishVarStatement(QToken*tok, uint*depth, QNode node, char isArray)
+{
+	parseSyntaxNext(tok,depth);
+	checkStatementCapoff(*tok,*depth);
+	if (!isArray)
+		qlogx(newNodePrint,
+			node->type, node->name, node->number);
+}
 /**
  *  \brief Read tokens and compile data from them
  *  
@@ -533,7 +539,6 @@ QSECTION FASTCALL_AD void checkStatementCapoff(QToken tok, uint depth)
  *           for statements to compile the script  \
  *           into data that's then written into a file
  */
-QSECTION char* newNodePrint = "New node: %3u, name: %p, value: %p\n";
 QSECTION FASTCALL_A QNode parse(QToken tok)
 {
 	QNode items = malloc(QSIZEOF(QNode));
@@ -581,7 +586,6 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 					if (tok->type == QTokOp &&
 						tok->op == QOpABeg)
 					{
-						//eputs("A\n");
 						parseSyntaxNext(&tok,&tokdepth);
 						// int[] numbers = [ 0,0,0 ];
 						//     -
@@ -705,11 +709,7 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 						node->value = tok->value;
 					}
 					ZeroValues:
-					parseSyntaxNext(&tok,&tokdepth);
-					checkStatementCapoff(tok,tokdepth);
-					if (!isArray)
-						qlogx(newNodePrint,
-							node->type, node->name, node->number);
+					finishVarStatement(&tok, &tokdepth, node, isArray);
 					break;
 				}
 				// dynamic values
@@ -719,7 +719,6 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 				case CRCD(0x61414D56,"string"):
 					node->type = QTypeCString;
 					
-					// MAKE THIS A FUNCTION? {
 					parseSyntaxNext(&tok,&tokdepth);
 					
 					// or
@@ -727,10 +726,9 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 					if (tok->type == QTokOp &&
 						tok->op == QOpABeg)
 					{
-						//eputs("A\n");
 						parseSyntaxNext(&tok,&tokdepth);
 						// string[] texts = ['A','B','C'];
-						//       -
+						//       --
 						VarDef_check_err(VarDef_err1_str3,
 							tokdepth,
 								tok->type == QTokOp &&
@@ -739,8 +737,8 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 						parseSyntaxNext(&tok,&tokdepth);
 						// string[] texts = ['A','B','C'];
 						//          -----
+						// or
 					}
-					
 					// string text = "Hello, World!";
 					//        ----
 					VarDef_check_err(VarDef_err1_str0,
@@ -752,21 +750,18 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 					VarDef_check_err(VarDef_err1_str1,
 						tokdepth,tok->type != QTokOp || tok->op != QOpSet);
 					parseSyntaxNext(&tok,&tokdepth);
-					// }
 					// string text = "Hello, World!";
 					//               ---------------
 					
 					if (isArray)
 					{
 						// string[] texts = ['A','B','C'];
-						//                -
+						//                  -
 						VarDef_check_err(VarDef_err1_str3,
 							tokdepth,
 								tok->type == QTokOp &&
 								tok->op != QOpABeg);
 						parseSyntaxNext(&tok,&tokdepth);
-						// string[] texts = ['A','B','C'];
-						//                   ---
 						
 						QArray arr = malloc(QSIZEOF(QArray));
 						node->data = arr;
@@ -825,14 +820,25 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 					}
 					
 					ZeroValuesAStr:
-					// MAKE THIS A FUNCTION? {
-					parseSyntaxNext(&tok,&tokdepth);
-					checkStatementCapoff(tok,tokdepth);
-					if (!isArray)
-						qlogx(newNodePrint,
-							node->type, node->name, node->number);
-					// }
+					finishVarStatement(&tok, &tokdepth, node, isArray);
 					break;
+				/* struct items = {
+				** ------	int i = 4;
+				** };
+				*/
+				//case CRCD(0x456D28D1,"struct"):
+					//node->type = QTypeQbStruct;
+					//break;
+					//this will have to result in
+					//all this declaration code
+					//being its own function(s)
+					//just like logger and qdb
+					//
+					//wanted to get pair and vector
+					//done first, so
+					//
+					//for qbkeyref, look for * or &
+					//after the type or value is specified
 				}
 				default:
 					printErrorHead(tokdepth);
@@ -856,6 +862,7 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 		NextItem(tok);
 		tokdepth++;
 	}
+	//qlog("EOF\n");
 	EndItAll:
 	return items;
 }
@@ -892,10 +899,10 @@ QSECTION FASTCALL_A isKeyword(QKey key)
 	return 0;
 }
 /**
- *  \brief Perform full compilation of a script string
+ *  \brief Perform full compilation of a script string.
  *  
  *  \param [in] scr Text to parse
- *  \param [in] dbg List to write debug names to, if 0, debug names will not be written
+ *  \param [in] dbg List to write debug names to. If 0, debug names will not be written.
  *  \return List of compiled values/items
  *  
  *  \details ok i regret wanting to document my code i give up on saying anything else here help me please im in a mental institution blinks twice help please kill
@@ -912,8 +919,7 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 	QDbg tmpdbg;
 	if (dbg)
 		tmpdbg = *dbg;
-	qlog("eval:\n");
-	qlog("tokenizing:\n");
+	qlog("eval:\ntokenizing:\n");
 	while (*lp)
 	{
 		if (!firstitem)
@@ -945,7 +951,12 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 					NextItem(tmpdbg);
 				}
 			}
+		// have to add EOF token whenever there's
+		// extra space at the end of a file
+		// because next token is initialized
+		// and the tokenizer reads meaningless text
 	}
+	qlog("end of file\n");
 #if 0
 	qlog("test:");
 	for (QToken test = tokens; test; NextItem(test))
@@ -973,17 +984,18 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 	// should i free memory here
 	return items;
 }
-QSECTION FASTCALL_A void AlignFile(FILE*f,int bits)
+QSECTION FASTCALL_A void AlignFile(FILE*f,char bits)
 {
+	int fnull[] = {0,0,0,0,0,0,0,0};
 	// bits == 2, align to 4 bytes
 	bits = 1 << bits;
-	int mask = bits-1;
-	int align = ftell(f);
+	char mask = bits-1;
+	char align = ftell(f);
 	if (align&mask)
 		fwrite(fnull, 1, bits-(align&mask), f);
 }
 /**
- *  \brief Write list of values/items to a new file
+ *  \brief Write list of values/items of a compiled script to a new file.
  *  
  *  \param [in] items List of items to write
  *  \param [in] fname File name
@@ -992,15 +1004,18 @@ QSECTION FASTCALL_A void AlignFile(FILE*f,int bits)
  */
 QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 {
-	QFile qbin = malloc(sizeof(QHead)+4);
-	qbin->head.gap = 0;
-	qbin->head.size = 0;
-	qbin->items = items;
-	memcpy(&qbin->head.unknown, qhead, sizeof(qhead)); // why even
 	FILE*qf = fopen(fname, "wb");
-	fwrite(qbin, sizeof(QHead), 1, qf);
-	char*test;
-	QArray arr;
+	if (!qf)
+	{
+		eputs("ERROR: Failed to create file.\n");
+		die();
+	}
+	{
+		int gaps[] = {0,0};
+		//  heh
+		fwrite(&gaps,sizeof(int),2,qf);
+		fwrite(qhead,sizeof(char),sizeof(qhead),qf);
+	}
 	if (name)
 		BSWAP(name);
 	for (; items && items->next != (void*)-1; NextItem(items))
@@ -1017,14 +1032,19 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				break;
 			// dynamic / pointed values
 			case QTypeCString:
+			{
+				char*test;
 				test = items->string;
 				items->number = Eswap(ftell(qf)+0x14);
 				fwrite(items, _sizeofQNode, 1, qf);
 				items->string = test;
 				fwrite(test, 1, strlen(test)+1, qf);
 				AlignFile(qf,2);
+			}
 				break;
 			case QTypeQbArray:
+			{
+				QArray arr;
 				arr = items->data;
 				items->number = Eswap(ftell(qf)+0x14);
 				fwrite(items, _sizeofQNode, 1, qf);
@@ -1034,7 +1054,10 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				// weird
 				// and unnecessary just to satisfy stdio
 				arr->numbers = (int*)Eswap(ftell(qf)+0xC);
-				fwrite(arr, _sizeofQArray, 1, qf);
+				int thxNS = _sizeofQArray;
+				if (Eswap(arr->count) < 2)
+					thxNS -= 4;
+				fwrite(arr, thxNS, 1, qf);
 				arr->count = Eswap(arr->count);
 				if (arr->type == QTypeCString)
 				{
@@ -1061,24 +1084,26 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 						ptr[i] = Eswap(ptr[i]);
 					fwrite(ptr, sizeof(int), arr->count, qf);
 				}
+			}
 				break;
 		}
 		items->name = Eswap(items->name);
+		items->parent = Eswap(name);
 	}
-	if (name)
-		BSWAP(name); // ...
-	qbin->head.size = ftell(qf);
+	//if (name)
+		//BSWAP(name); // ...
+	int qsize = ftell(qf);
 	fseek(qf, 4, SEEK_SET);
-	qbin->head.size = Eswap(qbin->head.size);
-	fwrite(&qbin->head.size, sizeof(int), 1, qf);
-	qbin->head.size = Eswap(qbin->head.size);
+	qsize = Eswap(qsize);
+	fwrite(&qsize, sizeof(int), 1, qf);
+	//qsize = Eswap(qsize);
 	fclose(qf);
 }
 QSECTION const char* dbg_hd0 = "[LineNumbers]\n";
 QSECTION const char* dbg_hd1 = "[Checksums]\n";
 QSECTION char*nl = "\n\0";
 /**
- *  \brief Write debug names from a compiled script to a file
+ *  \brief Write debug names from a compiled script to a file.
  *  
  *  \param [in] dbg   List of debug names
  *  \param [in] fname File name
@@ -1097,39 +1122,4 @@ QSECTION FASTCALL_AD void WriteDBG(QDbg dbg, char*fname)
 	}
 	fputs(nl, dbgf);
 	fclose(dbgf);
-}
-
-char defsigtext[] = "UNKNOWN\n";
-char*signaltexts[] = {
-	defsigtext,
-	defsigtext,
-	"Interrupted\n",
-	defsigtext,
-	"Aborted\n",
-	defsigtext,
-	"Illegal instruction\n",
-	defsigtext,
-	"Floating point error\n",
-	defsigtext,
-	defsigtext,
-	"Segfault\n",
-	defsigtext,
-	defsigtext,
-	defsigtext,
-	"Terminated\n",
-	defsigtext,
-	defsigtext,
-	defsigtext,
-	defsigtext,
-	defsigtext,
-	defsigtext,
-	"Break\n",
-	"Aborted\n"
-};
-QSECTION void catch(int sig)
-{
-	eputs("EXCEPTION CAUGHT:\n");
-	eputs(signaltexts[sig]);
-	eputs("Exiting\n");
-	die();
 }

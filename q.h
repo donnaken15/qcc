@@ -18,17 +18,10 @@ enum QTokenType {
 	QTokEnd,
 };
 enum QOps {
-	// should i separate keywords and one symbol operations here
-	//QOpIf,   // if
-	//QOpInt,  // int
-	//QOpFloat,// float
-	//QOpKey,  // qbkey
-	//QOpStr,  // string
-	//QOpStrc, // struct
-	//QOpPtr,  // qbkeyref
 	QOpSet,  // =
 	QOpCmp,  // ==
 	QOpSEnd, // ;
+	QOpColn, // :
 	QOpDlim, // ,
 	QOpPBeg, // (
 	QOpPEnd, // )
@@ -36,6 +29,13 @@ enum QOps {
 	QOpBEnd, // }
 	QOpABeg, // [
 	QOpAEnd, // ]
+	QOpPlus, // +
+	QOpMnus, // -
+	QOpAstx, // *
+	QOpDvid, // /
+	QOpLess, // <
+	QOpGrtr, // >
+	QOpNot,  // !
 };
 enum QNodeTypes
 {
@@ -130,15 +130,6 @@ typedef struct {
 		QNode**structs;
 	};
 } __static_QArray, *QArray;
-typedef struct {
-	uint gap;
-	uint size;
-	uint unknown[5];
-} QHead;
-typedef struct {
-	QHead head;
-	QNode items;
-} *QFile;
 #define NextItem(i) /*if (i->next)*/ i = i->next
 
 typedef struct {
@@ -187,11 +178,12 @@ enum CharFilters {
 		"  mov      %%eax, %0\n"\
 		:"=m"(i)\
 	)
+QSECTION FASTCALL_A Eswap(int);
 #define ESWAP(i) (((i & 0xFF) << 24) | ((i & 0xFF00) << 8) | ((i & 0xFF0000) >> 8) | ((i & 0xFF000000) >> 24))
 #else
 #define ESWAP(i) i
+#define BSWAP(i) i
 #endif
-QSECTION FASTCALL_A Eswap(int);
 QSECTION FASTCALL_A QKey crc32(char*);
 QSECTION void initCRC32();
 QSECTION FASTCALL_AD  char*tokenize(char*, QToken);
@@ -200,4 +192,3 @@ QSECTION FASTCALL_AD  QNode eval_scr(char*, QDbg*dbg);
 QSECTION FASTCALL_ADC void WriteQB(QNode, char*, QKey name);
 QSECTION FASTCALL_AD  void WriteDBG(QDbg dbg, char*fname);
 QSECTION void die();
-QSECTION void catch();
