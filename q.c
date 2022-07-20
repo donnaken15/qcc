@@ -529,6 +529,10 @@ QSECTION void finishVarStatement(QToken*tok, uint*depth, QNode node, char isArra
 		qlogx(newNodePrint,
 			node->type, node->name, node->number);
 }
+QSECTION void printToken(QToken tok)
+{
+	qlogx("current token: type: %2u, value: %p\n",  tok->type, tok->value);
+}
 /**
  *  \brief Read tokens and compile data from them
  *  
@@ -839,6 +843,90 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 					//
 					//for qbkeyref, look for * or &
 					//after the type or value is specified
+				case CRCD(0xE491B7A4,"vector"):
+				case CRCD(0xF6A5E196,"pair"):
+					{
+						if (tok->nkey == CRCD(0xE491B7A4,"vector"))
+							node->type = QTypeVector;
+						else
+							node->type = QTypePair;
+						char len = node->type-3;
+						
+						QArray arr = malloc(QSIZEOF(QArray));
+						node->data = arr;
+						arr->always01 = 0x0100;
+						arr->type = 0;
+						arr->floats = malloc(len<<2);
+						arr->count = 0;
+						
+						//printToken(tok);
+						// i need a function that iterates through this stuff using an array of tokens to check or something
+						parseSyntaxNext(&tok,&tokdepth);
+						// pair xy = (1.5,3.0);
+						//      --
+						VarDef_check_err(VarDef_err1_str0,
+							tokdepth,tok->type != QTokKey);
+						node->name = tok->nkey;
+						parseSyntaxNext(&tok,&tokdepth);
+						// pair xy = (1.5,3.0);
+						//         -
+						VarDef_check_err(VarDef_err1_str1,
+							tokdepth,tok->type != QTokOp || tok->op != QOpSet);
+						parseSyntaxNext(&tok,&tokdepth);
+						// pair xy = (1.5,3.0);
+						//           -
+						VarDef_check_err(VarDef_err1_str2,
+							tokdepth,tok->type != QTokOp || tok->op != QOpPBeg);
+						parseSyntaxNext(&tok,&tokdepth);
+						// pair xy = (1.5,3.0);
+						//            ---
+						VarDef_check_err(VarDef_err1_str2,
+							tokdepth,tok->type != QTokFloat);
+						arr->floats[0] = tok->single;
+						parseSyntaxNext(&tok,&tokdepth);
+						// pair xy = (1.5,3.0);
+						//               -
+						VarDef_check_err(VarDef_err1_str2,
+							tokdepth,tok->type != QTokOp || tok->op != QOpDlim);
+						parseSyntaxNext(&tok,&tokdepth);
+						// pair xy = (1.5,3.0);
+						//                ---
+						VarDef_check_err(VarDef_err1_str2,
+							tokdepth,tok->type != QTokFloat);
+						arr->floats[1] = tok->single;
+						parseSyntaxNext(&tok,&tokdepth);
+						// pair xy = (1.5,3.0);
+						//                   -
+						// or
+						// vector xyz = (1.0,2.0,3.0);
+						//                      -
+						if ((tok->type == QTokOp && tok->op == QOpPEnd) && node->type == QTypePair)
+						{
+							// lol
+						}
+						else if ((tok->type == QTokOp && tok->op == QOpDlim) && node->type == QTypeVector)
+						{
+							parseSyntaxNext(&tok,&tokdepth);
+							// vector xyz = (1.0,2.0,3.0);
+							//                       ---
+							VarDef_check_err(VarDef_err1_str2,
+								tokdepth,tok->type != QTokFloat);
+							arr->floats[2] = tok->single;
+							parseSyntaxNext(&tok,&tokdepth);
+							// vector xyz = (1.0,2.0,3.0);
+							//                          -
+							VarDef_check_err(VarDef_err1_str2,
+								tokdepth,tok->type != QTokOp || tok->op != QOpPEnd);
+						}
+						else
+						{
+							VarDef_check_err(VarDef_err1_str2,
+								tokdepth,1);
+						}
+						
+						finishVarStatement(&tok, &tokdepth, node, 0);
+						break;
+					}
 				}
 				default:
 					printErrorHead(tokdepth);
@@ -1027,6 +1115,8 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 			// 32 bit / fixed values
 			default:
 				items->number = Eswap(items->number);
+				// 0x00200X00,0xXXXXXXXX,0x........,0xXXXXXXXX,
+				// 0x00000000
 				fwrite(items, _sizeofQNode, 1, qf);
 				items->number = Eswap(items->number);
 				break;
@@ -1036,6 +1126,8 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				char*test;
 				test = items->string;
 				items->number = Eswap(ftell(qf)+0x14);
+				// 0x00200300,0xXXXXXXXX,0x........,0x********,
+				// 0x00000000,'asdfasdfasdf'
 				fwrite(items, _sizeofQNode, 1, qf);
 				items->string = test;
 				fwrite(test, 1, strlen(test)+1, qf);
@@ -1047,6 +1139,8 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				QArray arr;
 				arr = items->data;
 				items->number = Eswap(ftell(qf)+0x14);
+				// 0x00200C00,0xXXXXXXXX,0x........,0x********,
+				// 0x00000000
 				fwrite(items, _sizeofQNode, 1, qf);
 				items->data = arr;
 				arr->count = Eswap(arr->count);
@@ -1057,6 +1151,7 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				int thxNS = _sizeofQArray;
 				if (Eswap(arr->count) < 2)
 					thxNS -= 4;
+				// 0x00010X00,0xXXXXXXXX,0x********
 				fwrite(arr, thxNS, 1, qf);
 				arr->count = Eswap(arr->count);
 				if (arr->type == QTypeCString)
@@ -1080,10 +1175,37 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				}
 				else
 				{
+					// 0xXXXXXXXX * size
 					for (int i = 0; i < arr->count; i++)
 						ptr[i] = Eswap(ptr[i]);
 					fwrite(ptr, sizeof(int), arr->count, qf);
 				}
+			}
+				break;
+			case QTypePair:
+			case QTypeVector:
+			{
+				//                  ez
+				char len = items->type-3;
+				QArray arr;
+				arr = items->data;
+				items->number = Eswap(ftell(qf)+0x14);
+				// 0x00200500,0xXXXXXXXX,0x........,0x********,
+				// 0x00000000
+				fwrite(items, _sizeofQNode, 1, qf);
+				items->data = arr;
+				arr->count = Eswap(arr->count);
+				int* ptr = arr->numbers;
+				
+				arr->numbers = (int*)Eswap(ftell(qf)+0xC);
+				// 0x00010X00
+				fwrite(arr, 4, 1, qf);
+				arr->count = Eswap(arr->count);
+				
+				// 0xXXXXXXXX * size
+				for (int i = 0; i < len; i++)
+					ptr[i] = Eswap(ptr[i]);
+				fwrite(ptr,sizeof(float),len,qf);
 			}
 				break;
 		}

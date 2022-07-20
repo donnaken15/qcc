@@ -6,3 +6,5 @@ int[]	note	= [1500,3,500];
 float[]	vector	= [1.0,-2.0,4.0];
 qbkey[]	keys	= [player1_status, player2_status];
 string[]texts	= ['ABC123','XYZ789'];
+pair	xy		= (1.0,2.0);
+vector	xyz		= (1.0,2.0,3.0);
