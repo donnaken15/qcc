@@ -1,26 +1,34 @@
 
 /**
- *  \file main.c
- *  \brief Interface for the code in q.c
+ *  @file main.c
+ *  @brief Interface for the code in q.c
  */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "q.h"
+
+#define TEXTSECT     __attribute__ ((section(".text")))
 
 char*_read = "r";
 
 /**
- *  \brief Easy file loading to string/byte array.
+ *  @brief Easy file loading to string/byte array.
  *  
- *  \param [in] fname File name
- *  \return File contents
+ *  @param [in] fname File name
+ *  @return File contents
  *  
- *  \details ez
+ *  @details ez
  */
 FASTCALL_A char*load(char*fname)
 {
 	FILE*lfile = fopen(fname,_read);
+	if(!lfile)
+	{
+		fclose(lfile);
+		return 0;
+	}
 	fseek(lfile,0,SEEK_END);
 	size_t size = ftell(lfile);
 	rewind(lfile);
@@ -28,16 +36,18 @@ FASTCALL_A char*load(char*fname)
 	out[--size] = 0;
 	fread(out,1,size,lfile);
 	fclose(lfile);
-	return  out;
+	return out;
 }
 
-#define copy(addr,size) memcpy(malloc(size),addr,size)
+// wtf
+int __getmainargs(int * _Argc, char *** _Argv, char *** _Env, int _DoWildCard);
 
 int   argc;
 char**argv, __env;
 _start() // main(int argc,char**argv)
 {
-	__getmainargs(&argc,&argv,&__env,0);
+	//                  wtf v
+	__getmainargs(&argc,(char***)&argv,(char***)&__env,0);
 	
 	// argv[0] = this exe
 	if (argc == 1)
@@ -54,21 +64,18 @@ _start() // main(int argc,char**argv)
 			// optimize this too?
 			// since the switch names
 			// practically exist twice
-		return;
+		return 1;
 	}
 	else
 		puts("qcc");
 	
 	char*input = argv[1];
-	// check file existence
-	FILE*fscr = fopen(input,_read);
-	if (!fscr)
+	char*script = load(input);
+	if (!script)
 	{
 		puts("NONEXISTENT FILE!1!!");
-		fclose(fscr);
 		return 3;
 	}
-	fclose(fscr);
 	char*outf = 0;
 	char*scriptname = 0;
 	// convenient for if the program
@@ -77,7 +84,7 @@ _start() // main(int argc,char**argv)
 	// without specifying it via --name switch
 	//
 	// still had to use the switch in qbuild anyway |:|
-	char writedbg = 0;
+	char*writedbg = 0;
 	
 	char switchcount = 3;
 	char*switchnames[] = {
@@ -88,7 +95,8 @@ _start() // main(int argc,char**argv)
 		"--dbg"
 	};
 	// CAN'T USE VOID IN GCC
-	void*switchoutvals[] = {
+	char**switchoutvals[] = {
+		// entered switches and params get written here
 		&outf,
 		&scriptname,
 		&writedbg
@@ -129,7 +137,7 @@ _start() // main(int argc,char**argv)
 				}
 				else
 				{
-					*switchoutvals[j] = (char)1;
+					*switchoutvals[j] = (char*)1;
 					doesArgExist = 1;
 					break;
 				}
@@ -150,7 +158,7 @@ _start() // main(int argc,char**argv)
 		outf = (char*)memcpy(malloc(++fnlen),input,fnlen);
 		*(short*)(&outf[fnlen-1]) = 0x0062; // 1337 lol // 'b\0'
 	}
-	// debug name for the script is the output
+	// debug name for the script is the output's
 	// file name if not specified manually
 	if (!scriptname)
 		scriptname = outf;
@@ -168,7 +176,7 @@ _start() // main(int argc,char**argv)
 		_out_dbg = &dbgmain;
 		namedbg = scriptname;
 	}
-	QNode output = eval_scr(load(input),_out_dbg);
+	QNode output = eval_scr(script,_out_dbg);
 	
 	//puts("Writing output...");
 	WriteQB(output, outf, crc32(namedbg));
@@ -180,7 +188,7 @@ _start() // main(int argc,char**argv)
 		_out_dbg_.next = dbgmain;
 		
 		// stupid for no reason complicated thing
-		register int nameNoExt_len = (int)(strrchr(input, '.') - input) * -1;
+		register int nameNoExt_len = (int)(strrchr(input, '.') - input);
 		register char* nameWithDbg = (char*)memcpy(malloc(nameNoExt_len+5),input,nameNoExt_len);
 		*(int*)(&nameWithDbg[nameNoExt_len]) = 0x6762642E; // '.dbg'
 		// main.c:162: warning: multi-character character constant NO ONE CARES

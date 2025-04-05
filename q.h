@@ -1,12 +1,13 @@
 #pragma once
 
-typedef void* unk;
+#define Qlogging 1
+//#define PREGEN_CRCTAB 0
+
+typedef void*unk;
 typedef unsigned int QKey;
 typedef unsigned int uint;
 typedef unsigned short ushort;
 
-//typedef int QKey;
-//typedef int   QTokenType;
 enum QTokenType {
 	QTokEOF = -1,
 	//QTokNone,
@@ -22,6 +23,7 @@ enum QOps {
 	QOpCmp,  // ==
 	QOpSEnd, // ;
 	QOpColn, // :
+	QOpAxsr, // .
 	QOpDlim, // ,
 	QOpPBeg, // (
 	QOpPEnd, // )
@@ -63,7 +65,17 @@ enum QNodeTypes
 
 #define QLOCAL(t) __static_ ## t
 #define QSIZEOF(t) sizeof(QLOCAL(t))
+/**
+ *  @struct QToken
+ *  @brief Struct used to read text into more computer readable values
+ */
 typedef struct {
+	/**
+	 *  @var Value
+	 *  A union to define a value of various types
+	 *  
+	 *  @details A value that can be read as an integer, float, string, operation enum, pointer, or unknown value
+	 */
 	union {
 		unk   value;
 		QKey  nkey; // i dont know/forget why i named this specifically as it is
@@ -72,16 +84,40 @@ typedef struct {
 		char* string;
 		int   op;
 	};
+	/**
+	 *  @var Token type
+	 *  @details Type of token to know what type of value the token has
+	 */
 	uint type;
-	void*next;
-	//^ WHY
-} __static_QToken, *QToken;
+	/**
+	 *  @var Pointer of next token item
+	 *  @details If 0, it has no (more) leading items
+	 */
+	struct QLOCAL(QToken)*next;
+	// ok that's kind of dumb but at least it works
+} *QToken, QLOCAL(QToken);
 //uint _sizeofQToken; // for use with binary writing
 //uint _sizeofQNode;
+/**
+ *  @struct QNode
+ *  @brief Struct that contains data compiled from tokens
+ */
 typedef struct {
 	ushort always20;
+	/**
+	 *  @var Node type
+	 *  @details Type of node to know what type of value it has
+	 */
 	ushort type;
+	/**
+	 *  @var Node name
+	 *  @details CRC checksum of item name
+	 */
 	QKey name;
+	/**
+	 *  @var QB File
+	 *  @details CRC checksum of the name of the file this item is stored in
+	 */
 	QKey parent;
 	union {
 		unk   value;
@@ -89,33 +125,38 @@ typedef struct {
 		int   number;
 		float single;
 		char* string; //
-		void* data;   // for variable length data (strings,structs)
+		struct QLOCAL(QArray)*data;   // for variable length data (strings,structs)
 		              // this makes this value simply a pointer to the data
 	};
 	uint pad10;
-	void*next; // should i make it this way
-	           // where every struct that operates
-			   // in a list has next as the last value
-			   // so its easy for a function to interpret
-			   // a vague use of (void*) next in a
-			   // varying sized struct
-			   // using sizeof(struct)-4
-			   // (which would also require NextItem
-			   // changing to function that way)
-			   // and i just realized it works
-			   // the way it does with different
-			   // structs because its preprocessed
-			   // to write out i->next instead
-			   // of using a real function
-			   // actually just realized itd be
-			   // harder since sizeof isnt calculated
-			   // at runtime, then next would need
-			   // to be at a fixed offset
-			   // and then actually mess up
-			   // the writing funcs
-			   // am i talking to myself??
-			   // I NEED A LIFE (AMIRITE)
-} __static_QNode, *QNode;
+	/**
+	 *  @var Pointer of next token item
+	 *  @details If 0, it has no (more) leading items
+	 */
+	struct QLOCAL(QNode)*next;
+	// should i make it this way
+	// where every struct that operates
+	// in a list has next as the last value
+	// so its easy for a function to interpret
+	// a vague use of (void*) next in a
+	// varying sized struct
+	// using sizeof(struct)-4
+	// (which would also require NextItem
+	// changing to function that way)
+	// and i just realized it works
+	// the way it does with different
+	// structs because its preprocessed
+	// to write out i->next instead
+	// of using a real function
+	// actually just realized itd be
+	// harder since sizeof isnt calculated
+	// at runtime, then next would need
+	// to be at a fixed offset
+	// and then actually mess up
+	// the writing funcs
+	// am i talking to myself??
+	// I NEED A LIFE (AMIRITE)
+} *QNode, QLOCAL(QNode);
 typedef struct {
 	ushort always01;
 	ushort type;
@@ -129,15 +170,23 @@ typedef struct {
 		void **data;
 		QNode**structs;
 	};
-} __static_QArray, *QArray;
+} *QArray, QLOCAL(QArray);
+typedef struct {
+	unsigned char count;
+	char*sequence; // QOps
+} *QOpSeq, QLOCAL(QOpSeq);
 #define NextItem(i) /*if (i->next)*/ i = i->next
 
+/**
+ *  @struct QDbg
+ *  @brief Struct that provides human readable names of CRC checksums
+ */
 typedef struct {
 	QKey key;
 	char*name;
-	void*next;
+	struct QLOCAL(QDbg)*next;
 	//uint**lnum; // implement for scripts
-} __static_QDbg, *QDbg;
+} *QDbg, QLOCAL(QDbg);
 //extern char*tmpname;
 
 enum CharFilters {
@@ -155,9 +204,23 @@ enum CharFilters {
 
 #define copy(addr,size) memcpy(malloc(size),addr,size)
 
+/**
+ *  @def Enable script compilation logging
+ */
+#ifndef Qlogging
+// just in case the user manually
+// sets this switch from the compiler
+// for whatever reason
 #define Qlogging 1
+#endif
 
+/**
+ *  @def Enable pregenerated CRC table
+ *  @details Decide whether or not to use a pregenerated CRC table
+ */
+#ifndef PREGEN_CRCTAB
 #define PREGEN_CRCTAB 0
+#endif
 
 #define BE 1
 // why even

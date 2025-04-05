@@ -1,7 +1,12 @@
 
+// documentation that's no help to my own code i wrote
 /**
- *  \file q.c
- *  \brief Code for parsing Q scripts
+ *  @file q.c
+ *  @author Wesley Kennedy <wesley@gmx.it>
+ *  
+ *  https://github.com/donnaken15/qcc
+ *  
+ *  @brief Code for parsing Q scripts
  */
 
 #include <stdio.h>
@@ -15,9 +20,8 @@
 QSECTION FASTCALL_A void eputs(char*t) //chart lol
 {
 	fputs(t,stderr);
-} // saved like 100 bytes not making this a macro :/
-// ofc because stderr is an extra value to push
-// and because IOB
+}
+//extern QSECTION FASTCALL_A void eputs(char*t);
 QSECTION eprintf(char*fmt, ...)
 {
 	va_list args;
@@ -46,14 +50,14 @@ QSECTION void die()
 
 #if (BE == 1)
 /**
- *  \brief Swap endianness of input value
+ *  @brief Swap endianness of input value
  *  
- *  \param [in] value thx FASTcall --e-b-p- -1-3-3-7- -a-c-c-e-s-s- -t-o- -v-a-l-u-e--
- *  \return Swapped endianness of value
+ *  @param [in] value thx FASTcall --e-b-p- -1-3-3-7- -a-c-c-e-s-s- -t-o- -v-a-l-u-e--
+ *  @return Swapped endianness of value
  *  
  *  duh
  *  
- *  \details Screw GAS
+ *  @details Screw GAS
  */
 // should this be inline or something
 // i tried to do that with pointers
@@ -69,26 +73,34 @@ QSECTION FASTCALL_A Eswap(int _)
 		:
 		:"memory"
 	);
-	return;
+	return 0;
 }
 #else
 #define Eswap(i) i
 #endif
 
+/**
+ *  @var Unknown
+ *  @details Unknown header data that we for some reason just need
+ */
 QSECTION char qhead[] = {
 	0x1C, 0x08, 0x02, 0x04, 0x10, 0x04, 0x08, 0x0C,
 	0x0C, 0x08, 0x02, 0x04, 0x14, 0x02, 0x04, 0x0C,
 	0x10, 0x10, 0x0C, 0x00
 };
 const uint _sizeofQToken = QSIZEOF(QToken) - 4; // for use with binary writing
-const uint _sizeofQNode = QSIZEOF(QNode) - 4;
+const uint _sizeofQNode = QSIZEOF(QNode) - 4; // -4 to exclude next
 const uint _sizeofQArray = QSIZEOF(QArray);
 
-QSECTION char*tmpname;
+char*tmpname;
 
 QSECTION char*print4digit = "%4u\n";
 
 #if (PREGEN_CRCTAB == 1)
+/**
+ *  @var CRC Table
+ *  @brief CRC table for polynomial 0xEDB88320
+ */
 // pulled straight from tony hawk
 QSECTION uint crctable[256] = // CRC polynomial 0xedb88320
 {
@@ -160,6 +172,10 @@ QSECTION uint crctable[256] = // CRC polynomial 0xedb88320
 #else
 // implementation by nanook (wouldn't need if table is constant)
 // but also the table is a kilobyte
+/**
+ *  @var CRC Table
+ *  @brief CRC table for polynomial 0xEDB88320, filled out at runtime
+ */
 uint crctable[256];
 QSECTION void initCRC32()
 {
@@ -178,6 +194,12 @@ QSECTION void initCRC32()
 	}
 }
 #endif
+/**
+ *  @brief CRC checksum generator
+ *  
+ *  @param [in] text Text
+ *  @return CRC32 checksum
+ */
 QSECTION FASTCALL_A QKey crc32(char*text)
 {
 	register uint crc = 0xFFFFFFFF, len = strlen(text);
@@ -192,10 +214,11 @@ QSECTION FASTCALL_A QKey crc32(char*text)
 	}
 	return crc;
 }
-char syntaxChars[] = {
+QSECTION char syntaxChars[] = {
 	'=',
 	';',
 	':',
+	'.',
 	',',
 	'(',
 	')',
@@ -211,24 +234,6 @@ char syntaxChars[] = {
 	'>',
 	'!'
 };
-/*char syntaxIds[] = { // already in order
-	QOpSet,
-	QOpSEnd,
-	QOpColn,
-	QOpDlim,
-	QOpPBeg,
-	QOpPEnd,
-	QOpBBeg,
-	QOpBEnd,
-	QOpABeg,
-	QOpAEnd,
-	QOpPlus,
-	QOpAstx,
-	QOpDvid,
-	QOpLess,
-	QOpGrtr,
-	QOpNot
-};*/
 QSECTION FASTCALL_A charfilter(char c)
 {
 	switch (c)
@@ -261,22 +266,36 @@ QSECTION FASTCALL_A charfilter(char c)
 }
 QSECTION char*tokenErrorHead = "ERROR @ Tokenizer: \"%s\"\n";
 /**
- *  \brief Read text and create a token from it
+ *  @brief Read text and create a token from it
  *  
- *  \param [in] text Text to parse
- *  \param [in] out Pointer to create token at
+ *  @param [in] text Text to parse
+ *  @param [in] out Pointer to create token at
  *           ^  ^
  *            :/
  *  
- *  \return Return position in text after parsing
+ *  @return Return position in text after parsing
  *  
- *  \details Read text that contains syntax, names, strings, numbers, and skip whitespace and comments that precede
+ *  @details Read text that contains either syntax, names, \
+ *           strings, or numbers, and skip whitespace and \
+ *           comments that precede
+ *  
+ *  Only one piece of text can
+ *  be parsed into a token at a time.
+ *  Meaning, of this text:
+ *  string text = "hello"; int number = 100;
+ *  Only `string` will be parsed
+ *  when this function is run once,
+ *  unless a loop using this
+ *  function is made to read
+ *  all pieces of text, which
+ *  is done in eval_scr
  */
 QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 {
 	int*type = &out->type;
 	// thinking this will be faster than -> every time
 	// because thats compiled like [ebp+16] or something
+	// as if that isn't already done with scoped vars
 	checkForBothWSandCmnts:
 	while (*text == ' ' || *text == '\t' || *text == '\n' || *text == '\r')
 	{
@@ -319,6 +338,7 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 			die();
 		}
 		goto checkForBothWSandCmnts; // hi rato :^)
+		// loop until it finds something valuable thats typed by the user
 	}
 	if (!*text)
 	{
@@ -335,6 +355,7 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 		// this works now now that its scoped
 		// in a code block where its actually
 		// discarded after execution
+		// unlike switch/cases without blocks
 		char*id = text;
 		int  il = 0;
 		do {
@@ -361,11 +382,9 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 		// and that all numbers dont have
 		// spaces in between syntax
 		// as if any sane person does that
-		if (*text == '-')
-		{
+		if (*text == '-' || *text == '.')
 			if (charfilter(text[1]) != CF_Number)
 				goto case_CF_Syntax;
-		}
 		char*num  = text;
 		int  dgt  = 0;
 		int  dec  = 0;
@@ -384,6 +403,7 @@ QSECTION FASTCALL_AD char*tokenize(char*text, QToken out)
 				// abort created stuck processes
 				// i can't kill, which makes me
 				// want to kill *my* process...
+				// disabling WER is a life saver
 			}
 			// check for extra signs
 			if (*text == '-')
@@ -520,7 +540,6 @@ QSECTION FASTCALL_AD void checkStatementCapoff(QToken tok, uint depth)
 	}
 }
 QSECTION char* newNodePrint = "New node: %3u, name: %p, value: %p\n";
-// somehow doesn't work
 QSECTION void finishVarStatement(QToken*tok, uint*depth, QNode node, char isArray)
 {
 	parseSyntaxNext(tok,depth);
@@ -534,14 +553,14 @@ QSECTION void printToken(QToken tok)
 	qlogx("current token: type: %2u, value: %p\n",  tok->type, tok->value);
 }
 /**
- *  \brief Read tokens and compile data from them
+ *  @brief Read tokens and compile data from them
  *  
- *  \param [in] tok List of tokens
- *  \return List of items
+ *  @param [in] tok List of tokens
+ *  @return List of items
  *  
- *  \details Read tokens from tokenizer and check  \
- *           for statements to compile the script  \
- *           into data that's then written into a file
+ *  @details Read tokens from tokenizer and check
+ *           for statements to compile the script
+ *           into data that will then be written into a file
  */
 QSECTION FASTCALL_A QNode parse(QToken tok)
 {
@@ -838,9 +857,6 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 					//being its own function(s)
 					//just like logger and qdb
 					//
-					//wanted to get pair and vector
-					//done first, so
-					//
 					//for qbkeyref, look for * or &
 					//after the type or value is specified
 				case CRCD(0xE491B7A4,"vector"):
@@ -861,6 +877,8 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 						
 						//printToken(tok);
 						// i need a function that iterates through this stuff using an array of tokens to check or something
+						// especially for these variable declarations
+						// and all the `type name =`
 						parseSyntaxNext(&tok,&tokdepth);
 						// pair xy = (1.5,3.0);
 						//      --
@@ -950,7 +968,6 @@ QSECTION FASTCALL_A QNode parse(QToken tok)
 		NextItem(tok);
 		tokdepth++;
 	}
-	//qlog("EOF\n");
 	EndItAll:
 	return items;
 }
@@ -964,36 +981,14 @@ QSECTION FASTCALL_AD checkdbg(QDbg dbg,uint key)
 	}
 	return 0;
 }
-QSECTION QKey kwkeys[] = {
-	// I NEED TO FIND OUT HOW TO
-	// MAKE A MACRO THAT MAKES A
-	// CONSTANT STRING TO A CONSTANT KEY
-	// BLACK MAGIC CONSTEXPR ON C99
-	CRCD(0xEBAE254E,"int"),
-	CRCD(0x365AA16A,"float"),
-	CRCD(0x19918CAE,"qbkey"),
-	CRCD(0x61414D56,"string"),
-	CRCD(0xF6A5E196,"pair"),
-	CRCD(0xE491B7A4,"vector"),
-	CRCD(0xAEC8F983,"if"),
-};
-QSECTION FASTCALL_A isKeyword(QKey key)
-{
-	for (int i = 0; i < kwkeys[i]; i++)
-	{
-		if(key == kwkeys[i])
-			return 1;
-	}
-	return 0;
-}
 /**
- *  \brief Perform full compilation of a script string.
+ *  @brief Perform full compilation of a script string.
  *  
- *  \param [in] scr Text to parse
- *  \param [in] dbg List to write debug names to. If 0, debug names will not be written.
- *  \return List of compiled values/items
+ *  @param [in] scr Text to parse
+ *  @param [in] dbg List to write debug names to. If 0, debug names will not be written.
+ *  @return List of compiled values/items
  *  
- *  \details ok i regret wanting to document my code i give up on saying anything else here help me please im in a mental institution blinks twice help please kill
+ *  @details ok i regret wanting to document my code i give up on saying anything else here help me please im in a mental institution blinks twice help please kill
  */
 QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 {
@@ -1003,6 +998,7 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 	char*lp = scr;
 	QToken tokens;
 	QToken tmptok;
+	QToken lasttok = 0;
 	char firstitem = 1;
 	QDbg tmpdbg;
 	if (dbg)
@@ -1012,6 +1008,7 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 	{
 		if (!firstitem)
 		{
+			lasttok = tmptok;
 			tmptok->next = malloc(QSIZEOF(QToken));
 			NextItem(tmptok);
 			tmptok->next = 0;
@@ -1024,6 +1021,13 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 		}
 		qlogx("%4u: ", lp - scr);
 		lp = tokenize(lp, tmptok);
+		if (lasttok)
+			if (tmptok->type == QTokEOF)
+				lasttok->next = 0;
+		// have to add EOF token whenever there's
+		// extra space at the end of a file
+		// because next token is initialized
+		// and the tokenizer reads meaningless text
 		if (dbg)
 			if (tmptok->type == QTokKey/* && !isKeyword(tmptok->nkey)*/)
 			{
@@ -1039,10 +1043,6 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 					NextItem(tmpdbg);
 				}
 			}
-		// have to add EOF token whenever there's
-		// extra space at the end of a file
-		// because next token is initialized
-		// and the tokenizer reads meaningless text
 	}
 	qlog("end of file\n");
 #if 0
@@ -1074,7 +1074,7 @@ QSECTION FASTCALL_AD QNode eval_scr(char*scr, QDbg*dbg)
 }
 QSECTION FASTCALL_A void AlignFile(FILE*f,char bits)
 {
-	int fnull[] = {0,0,0,0,0,0,0,0};
+	int*fnull = calloc(8,sizeof(int));
 	// bits == 2, align to 4 bytes
 	bits = 1 << bits;
 	char mask = bits-1;
@@ -1083,12 +1083,12 @@ QSECTION FASTCALL_A void AlignFile(FILE*f,char bits)
 		fwrite(fnull, 1, bits-(align&mask), f);
 }
 /**
- *  \brief Write list of values/items of a compiled script to a new file.
+ *  @brief Write list of values/items of a compiled script to a new file.
  *  
- *  \param [in] items List of items to write
- *  \param [in] fname File name
- *  \param [in] name  CRC of script name
- *  \return None
+ *  @param [in] items List of items to write
+ *  @param [in] fname File name
+ *  @param [in] name  CRC of script name
+ *  @return None
  */
 QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 {
@@ -1144,7 +1144,7 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				fwrite(items, _sizeofQNode, 1, qf);
 				items->data = arr;
 				arr->count = Eswap(arr->count);
-				int* ptr = arr->numbers;
+				int*ptr = arr->numbers;
 				// weird
 				// and unnecessary just to satisfy stdio
 				arr->numbers = (int*)Eswap(ftell(qf)+0xC);
@@ -1154,20 +1154,22 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				// 0x00010X00,0xXXXXXXXX,0x********
 				fwrite(arr, thxNS, 1, qf);
 				arr->count = Eswap(arr->count);
+				uint _count = arr->count;
+				uint _count_4 = _count<<2;
 				if (arr->type == QTypeCString)
 				{
-					char**strs = copy(ptr,arr->count<<2);
-					int*strlens = malloc(arr->count<<2); // STACK ARRAY MAKES .TEXT LARGER
+					char**strs = copy(ptr,_count_4);
+					int*strlens = malloc(_count_4); // STACK ARRAY MAKES .TEXT LARGER
 					int stroff = 0;
-					for (int i = 0; i < arr->count; i++)
+					for (int i = 0; i < _count; i++)
 					{
-						ptr[i] = Eswap(ftell(qf)+(arr->count<<2)+stroff);
+						ptr[i] = Eswap(ftell(qf)+_count_4+stroff);
 						strlens[i] = strlen(strs[i])+1;
 						stroff += strlens[i];
 					}
-					fwrite(ptr, sizeof(int), arr->count, qf);
+					fwrite(ptr, sizeof(int), _count, qf);
 					arr->strings = strs;
-					for (int i = 0; i < arr->count; i++)
+					for (int i = 0; i < _count; i++)
 					{
 						fwrite(strs[i], sizeof(char), strlens[i], qf);
 					}
@@ -1176,9 +1178,9 @@ QSECTION FASTCALL_ADC void WriteQB(QNode items, char*fname, QKey name)
 				else
 				{
 					// 0xXXXXXXXX * size
-					for (int i = 0; i < arr->count; i++)
+					for (int i = 0; i < _count; i++)
 						ptr[i] = Eswap(ptr[i]);
-					fwrite(ptr, sizeof(int), arr->count, qf);
+					fwrite(ptr, sizeof(int), _count, qf);
 				}
 			}
 				break;
@@ -1225,11 +1227,11 @@ QSECTION const char* dbg_hd0 = "[LineNumbers]\n";
 QSECTION const char* dbg_hd1 = "[Checksums]\n";
 QSECTION char*nl = "\n\0";
 /**
- *  \brief Write debug names from a compiled script to a file.
+ *  @brief Write debug names from a compiled script to a file.
  *  
- *  \param [in] dbg   List of debug names
- *  \param [in] fname File name
- *  \return None
+ *  @param [in] dbg   List of debug names
+ *  @param [in] fname File name
+ *  @return None
  */
 QSECTION FASTCALL_AD void WriteDBG(QDbg dbg, char*fname)
 {
@@ -1245,3 +1247,8 @@ QSECTION FASTCALL_AD void WriteDBG(QDbg dbg, char*fname)
 	fputs(nl, dbgf);
 	fclose(dbgf);
 }
+
+// optional pointing out error idea
+// store char position and length of token strings
+// so when an error is thrown, display the
+// actual cause
